@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ridesure-postgres
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_DB: ridesure
+      POSTGRES_USER: ridesure
+      POSTGRES_PASSWORD: ridesure_pass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ridesure']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../services/api_nest
+      dockerfile: Dockerfile
+    container_name: ridesure-api
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ridesure:ridesure_pass@postgres:5432/ridesure?schema=public
+      JWT_SECRET: dev-jwt-secret-ridesure-2024
+      JWT_EXPIRATION: 7d
+      OTP_EXPIRY_MINUTES: 5
+      UPLOAD_DIR: /app/uploads
+      PORT: 3000
+    volumes:
+      - ../uploads:/app/uploads
+
+  admin:
+    build:
+      context: ../apps/admin_next
+      dockerfile: Dockerfile
+    container_name: ridesure-admin
+    ports:
+      - '3001:3000'
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+
+volumes:
+  pgdata:

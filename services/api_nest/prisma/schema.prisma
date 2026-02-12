@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ──────────────────────────────────────────────
+
+enum UserRole {
+  PASSENGER
+  RIDER
+  ADMIN
+}
+
+enum RiderStatus {
+  PENDING_DOCUMENTS
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum DocumentType {
+  NRC
+  SELFIE
+  RIDER_LICENCE
+  INSURANCE_CERTIFICATE
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TripType {
+  RIDE
+  DELIVERY
+}
+
+enum TripStatus {
+  REQUESTED
+  OFFERED
+  ACCEPTED
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ─── MODELS ─────────────────────────────────────────────
+
+model User {
+  id          String   @id @default(uuid())
+  phone       String   @unique
+  name        String?
+  role        UserRole @default(PASSENGER)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  rider       Rider?
+  trips       Trip[]       @relation("PassengerTrips")
+  ratings     Rating[]     @relation("PassengerRatings")
+  incidents   Incident[]   @relation("ReporterIncidents")
+
+  @@map("users")
+}
+
+model Rider {
+  id              String      @id @default(uuid())
+  userId          String      @unique
+  status          RiderStatus @default(PENDING_DOCUMENTS)
+  isOnline        Boolean     @default(false)
+  currentLat      Float?
+  currentLng      Float?
+  lastLocationAt  DateTime?
+  deviceToken     String?
+  rejectionReason String?
+  totalTrips      Int         @default(0)
+  avgRating       Float       @default(0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  user            User            @relation(fields: [userId], references: [id])
+  documents       RiderDocument[]
+  vehicle         Vehicle?
+  trips           Trip[]          @relation("RiderTrips")
+  ratings         Rating[]        @relation("RiderRatings")
+
+  @@map("riders")
+}
+
+model RiderDocument {
+  id             String         @id @default(uuid())
+  riderId        String
+  type           DocumentType
+  status         DocumentStatus @default(PENDING)
+  filePath       String
+  originalName   String
+  mimeType       String
+  // Insurance-specific fields
+  insurerName    String?
+  policyNumber   String?
+  expiryDate     DateTime?
+  rejectionReason String?
+  reviewedAt     DateTime?
+  reviewedBy     String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  rider          Rider          @relation(fields: [riderId], references: [id])
+
+  @@unique([riderId, type])
+  @@map("rider_documents")
+}
+
+model Vehicle {
+  id          String   @id @default(uuid())
+  riderId     String   @unique
+  make        String?
+  model       String
+  color       String?
+  plateNumber String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  rider       Rider    @relation(fields: [riderId], references: [id])
+
+  @@map("vehicles")
+}
+
+model Trip {
+  id                String    @id @default(uuid())
+  type              TripType
+  status            TripStatus @default(REQUESTED)
+  passengerId       String
+  riderId           String?
+
+  // Locations
+  pickupLat         Float
+  pickupLng         Float
+  pickupAddress     String
+  pickupLandmark    String?
+  destinationLat    Float
+  destinationLng    Float
+  destinationAddress String
+  destinationLandmark String?
+
+  // Fare
+  estimatedDistance  Float?
+  estimatedFareLow  Float?
+  estimatedFareHigh Float?
+  actualFare        Float?
+
+  // Delivery-specific
+  packageType       String?
+  packageNotes      String?
+  pickupPhotoPath   String?
+  dropoffPhotoPath  String?
+
+  // Trip sharing
+  shareCode         String?   @unique
+
+  // Cancellation
+  cancelledBy       String?
+  cancelReason      String?
+
+  // Timestamps
+  requestedAt       DateTime  @default(now())
+  acceptedAt        DateTime?
+  arrivedAt         DateTime?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  passenger         User      @relation("PassengerTrips", fields: [passengerId], references: [id])
+  rider             Rider?    @relation("RiderTrips", fields: [riderId], references: [id])
+  events            TripEvent[]
+  rating            Rating?
+  incidents         Incident[]
+
+  @@map("trips")
+}
+
+model TripEvent {
+  id        String   @id @default(uuid())
+  tripId    String
+  event     String
+  data      Json?
+  lat       Float?
+  lng       Float?
+  createdAt DateTime @default(now())
+
+  // Relations
+  trip      Trip     @relation(fields: [tripId], references: [id])
+
+  @@map("trip_events")
+}
+
+model Rating {
+  id        String   @id @default(uuid())
+  tripId    String   @unique
+  passengerId String
+  riderId   String
+  score     Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  // Relations
+  trip      Trip     @relation(fields: [tripId], references: [id])
+  passenger User     @relation("PassengerRatings", fields: [passengerId], references: [id])
+  rider     Rider    @relation("RiderRatings", fields: [riderId], references: [id])
+
+  @@map("ratings")
+}
+
+model Incident {
+  id          String           @id @default(uuid())
+  tripId      String?
+  reporterId  String
+  severity    IncidentSeverity @default(MEDIUM)
+  description String
+  resolved    Boolean          @default(false)
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  resolution  String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  trip        Trip?            @relation(fields: [tripId], references: [id])
+  reporter    User             @relation("ReporterIncidents", fields: [reporterId], references: [id])
+
+  @@map("incidents")
+}
+
+model AdminUser {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("admin_users")
+}
+
+model FareConfig {
+  id            String   @id @default(uuid())
+  town          String
+  baseFare      Float
+  perKmRate     Float
+  minimumFare   Float
+  nightMultiplier Float  @default(1.0)
+  rainMultiplier  Float  @default(1.0)
+  nightStart    Int      @default(20)
+  nightEnd      Int      @default(6)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([town, isActive])
+  @@map("fare_configs")
+}
+
+model OtpCode {
+  id        String   @id @default(uuid())
+  phone     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, code])
+  @@map("otp_codes")
+}
