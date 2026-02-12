@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -26,14 +28,10 @@ class AuthService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString('auth_token');
     final userJson = prefs.getString('auth_user');
-    if (_token != null && _token!.isNotEmpty) {
-      // Try to parse stored user
-      if (userJson != null) {
-        try {
-          // Simple parse - in production you'd use dart:convert
-          _user = null; // Will be fetched from profile
-        } catch (_) {}
-      }
+    if (_token != null && _token!.isNotEmpty && userJson != null) {
+      try {
+        _user = User.fromJson(jsonDecode(userJson));
+      } catch (_) {}
     }
     notifyListeners();
   }
@@ -47,7 +45,6 @@ class AuthService extends ChangeNotifier {
     try {
       await _dio.post('/auth/otp/request', data: {
         'phone': phone,
-        'role': 'RIDER',
       });
       _pendingPhone = phone;
       _isLoading = false;
@@ -62,7 +59,7 @@ class AuthService extends ChangeNotifier {
   }
 
   /// Verify OTP and get JWT token.
-  Future<bool> verifyOtp(String phone, String code) async {
+  Future<bool> verifyOtp(String phone, String code, {String? name}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -72,17 +69,28 @@ class AuthService extends ChangeNotifier {
         'phone': phone,
         'code': code,
         'role': 'RIDER',
+        if (name != null) 'name': name,
       });
 
       final data = response.data;
-      _token = data['token'] ?? data['accessToken'];
+      _token = data['accessToken'];
       if (data['user'] != null) {
         _user = User.fromJson(data['user']);
       }
 
-      // Store token
+      // Store token and user
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('auth_token', _token!);
+      if (_user != null) {
+        await prefs.setString('auth_user', jsonEncode({
+          'id': _user!.id,
+          'phone': _user!.phone,
+          'name': _user!.name,
+          'role': _user!.role,
+          'riderId': _user!.riderId,
+          'riderStatus': _user!.riderStatus,
+        }));
+      }
 
       _isLoading = false;
       _pendingPhone = null;
@@ -105,38 +113,6 @@ class AuthService extends ChangeNotifier {
     await prefs.remove('auth_token');
     await prefs.remove('auth_user');
     notifyListeners();
-  }
-
-  /// Update user profile info.
-  Future<bool> updateProfile({
-    String? firstName,
-    String? lastName,
-    String? email,
-  }) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final response = await _dio.patch('/users/me', data: {
-        if (firstName != null) 'firstName': firstName,
-        if (lastName != null) 'lastName': lastName,
-        if (email != null) 'email': email,
-      });
-
-      if (response.data['user'] != null) {
-        _user = User.fromJson(response.data['user']);
-      }
-
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } on DioException catch (e) {
-      _error = _extractError(e);
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
   }
 
   String _extractError(DioException e) {

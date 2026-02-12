@@ -101,14 +101,10 @@ class _BookingScreenState extends State<BookingScreen> {
     // Request ride directly
     final tripService = context.read<TripService>();
     final trip = await tripService.requestTrip(
-      pickup: TripLocation(
-        coordinates: _pickup!,
-        address: _pickupController.text,
-      ),
-      destination: TripLocation(
-        coordinates: _destination!,
-        address: _destinationController.text,
-      ),
+      pickup: _pickup!,
+      destination: _destination!,
+      pickupAddress: _pickupController.text,
+      destinationAddress: _destinationController.text,
       type: _tripType,
     );
 

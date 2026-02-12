@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
 import '../../services/trip_service.dart';
 
 class TripHistoryScreen extends StatefulWidget {
@@ -10,7 +12,6 @@ class TripHistoryScreen extends StatefulWidget {
 }
 
 class _TripHistoryScreenState extends State<TripHistoryScreen> {
-  final TripService _tripService = TripService();
   List<dynamic> _trips = [];
   bool _loading = true;
 
@@ -21,11 +22,14 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
   }
 
   Future<void> _loadTrips() async {
+    final tripService = context.read<TripService>();
     try {
-      final trips = await _tripService.getMyTrips();
-      setState(() { _trips = trips; _loading = false; });
+      final trips = await tripService.getMyTrips();
+      if (mounted) {
+        setState(() { _trips = trips; _loading = false; });
+      }
     } catch (e) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -76,11 +80,6 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
                                   if (fare != null)
                                     Text('K${(fare as num).toStringAsFixed(2)}',
                                         style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  if (trip['rating'] != null) ...[
-                                    const SizedBox(width: 8),
-                                    Icon(Icons.star, size: 14, color: Colors.amber[700]),
-                                    Text('${trip['rating']['score']}', style: const TextStyle(fontSize: 12)),
-                                  ],
                                 ],
                               ),
                             ],

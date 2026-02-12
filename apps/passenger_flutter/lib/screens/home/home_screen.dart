@@ -67,8 +67,13 @@ class _HomeScreenState extends State<HomeScreen> {
           Navigator.pushNamed(context, '/active-trip');
           break;
         case models.TripStatus.COMPLETED:
-          if (trip.rating == null) {
-            Navigator.pushNamed(context, '/trip-complete');
+          if (trip.ratingScore == null) {
+            Navigator.pushNamed(context, '/trip-complete', arguments: {
+              'id': trip.id,
+              'actualFare': trip.actualFare,
+              'estimatedFareHigh': trip.estimatedFareHigh,
+              'rider': trip.rider?.toJson(),
+            });
           }
           break;
         default:

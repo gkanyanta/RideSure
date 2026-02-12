@@ -79,7 +79,7 @@ class AuthService extends ChangeNotifier {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.data;
-        _token = data['access_token'] ?? data['token'];
+        _token = data['accessToken'] ?? data['access_token'] ?? data['token'];
         _currentUser = User.fromJson(data['user']);
 
         await _storeAuth();

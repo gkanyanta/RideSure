@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/trip_service.dart';
 
 class SosButton extends StatelessWidget {
@@ -45,7 +46,8 @@ class SosButton extends StatelessWidget {
             onPressed: () async {
               Navigator.pop(ctx);
               try {
-                await TripService().triggerSos(tripId, 'SOS triggered by passenger');
+                final tripService = context.read<TripService>();
+                await tripService.sendSos(tripId, description: 'SOS triggered by passenger');
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(

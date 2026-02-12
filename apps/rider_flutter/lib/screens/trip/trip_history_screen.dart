@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
 import '../../services/trip_service.dart';
 
 class TripHistoryScreen extends StatefulWidget {
@@ -10,7 +12,6 @@ class TripHistoryScreen extends StatefulWidget {
 }
 
 class _TripHistoryScreenState extends State<TripHistoryScreen> {
-  final TripService _tripService = TripService();
   List<dynamic> _trips = [];
   bool _loading = true;
 
@@ -21,14 +22,17 @@ class _TripHistoryScreenState extends State<TripHistoryScreen> {
   }
 
   Future<void> _loadTrips() async {
+    final tripService = context.read<TripService>();
     try {
-      final trips = await _tripService.getRiderTrips();
-      setState(() {
-        _trips = trips;
-        _loading = false;
-      });
+      final trips = await tripService.getRiderTrips();
+      if (mounted) {
+        setState(() {
+          _trips = trips;
+          _loading = false;
+        });
+      }
     } catch (e) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 

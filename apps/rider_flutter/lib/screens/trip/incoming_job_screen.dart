@@ -3,9 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../config/theme.dart';
 import '../../models/user.dart';
-import '../../services/trip_service.dart';
 import '../../services/socket_service.dart';
 
 /// Full-screen route for incoming job (used from routes).
@@ -80,6 +78,11 @@ class IncomingJobContent extends StatefulWidget {
 }
 
 class _IncomingJobContentState extends State<IncomingJobContent> {
+  static const Color _primaryGreen = Color(0xFF1B5E20);
+  static const Color _accentGreen = Color(0xFF4CAF50);
+  static const Color _dangerRed = Color(0xFFD32F2F);
+  static const Color _warningOrange = Color(0xFFFF9800);
+
   late int _secondsLeft;
   Timer? _timer;
 
@@ -102,7 +105,6 @@ class _IncomingJobContentState extends State<IncomingJobContent> {
   }
 
   void _handleTimeout() {
-    // Auto-reject on timeout
     final socket = context.read<SocketService>();
     socket.rejectTrip(widget.offer.tripId);
     widget.onReject();
@@ -112,13 +114,9 @@ class _IncomingJobContentState extends State<IncomingJobContent> {
     _timer?.cancel();
 
     final socket = context.read<SocketService>();
-    final tripService = context.read<TripService>();
 
-    // Accept via socket for immediate response
+    // Accept via socket
     socket.acceptTrip(widget.offer.tripId);
-
-    // Also accept via REST API for reliability
-    await tripService.acceptTrip(widget.offer.tripId);
 
     widget.onAccept();
 
@@ -127,6 +125,18 @@ class _IncomingJobContentState extends State<IncomingJobContent> {
         context,
         '/active-trip',
         (route) => route.settings.name == '/home' || route.isFirst,
+        arguments: {
+          'id': widget.offer.trip.id,
+          'type': widget.offer.trip.type,
+          'status': 'ACCEPTED',
+          'pickupAddress': widget.offer.trip.pickupAddress,
+          'destinationAddress': widget.offer.trip.destinationAddress,
+          'estimatedFareLow': widget.offer.trip.estimatedFareLow,
+          'estimatedFareHigh': widget.offer.trip.estimatedFareHigh,
+          'passenger': widget.offer.trip.passenger,
+          'destinationLat': widget.offer.trip.destinationLat,
+          'destinationLng': widget.offer.trip.destinationLng,
+        },
       );
     }
   }
@@ -168,9 +178,7 @@ class _IncomingJobContentState extends State<IncomingJobContent> {
                   strokeWidth: 6,
                   backgroundColor: Colors.grey[300],
                   valueColor: AlwaysStoppedAnimation(
-                    _secondsLeft <= 5
-                        ? AppTheme.dangerRed
-                        : AppTheme.primaryGreen,
+                    _secondsLeft <= 5 ? _dangerRed : _primaryGreen,
                   ),
                 ),
               ),
@@ -179,9 +187,7 @@ class _IncomingJobContentState extends State<IncomingJobContent> {
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
-                  color: _secondsLeft <= 5
-                      ? AppTheme.dangerRed
-                      : AppTheme.primaryGreen,
+                  color: _secondsLeft <= 5 ? _dangerRed : _primaryGreen,
                 ),
               ),
             ],
@@ -193,17 +199,15 @@ class _IncomingJobContentState extends State<IncomingJobContent> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
               color: trip.isDelivery
-                  ? AppTheme.warningOrange.withOpacity(0.1)
-                  : AppTheme.primaryGreen.withOpacity(0.1),
+                  ? _warningOrange.withOpacity(0.1)
+                  : _primaryGreen.withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               trip.isDelivery ? 'DELIVERY' : 'RIDE',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: trip.isDelivery
-                    ? AppTheme.warningOrange
-                    : AppTheme.primaryGreen,
+                color: trip.isDelivery ? _warningOrange : _primaryGreen,
               ),
             ),
           ),
@@ -215,12 +219,12 @@ class _IncomingJobContentState extends State<IncomingJobContent> {
             style: const TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: AppTheme.primaryGreen,
+              color: _primaryGreen,
             ),
           ),
-          if (trip.distance != null)
+          if (trip.estimatedDistance != null)
             Text(
-              '${trip.distance!.toStringAsFixed(1)} km',
+              '${trip.estimatedDistance!.toStringAsFixed(1)} km',
               style: TextStyle(fontSize: 16, color: Colors.grey[600]),
             ),
           const SizedBox(height: 20),
@@ -228,7 +232,7 @@ class _IncomingJobContentState extends State<IncomingJobContent> {
           // Pickup
           _buildLocationRow(
             icon: Icons.radio_button_checked,
-            color: AppTheme.accentGreen,
+            color: _accentGreen,
             label: 'PICKUP',
             address: trip.pickupAddress,
           ),
@@ -241,23 +245,23 @@ class _IncomingJobContentState extends State<IncomingJobContent> {
           // Dropoff
           _buildLocationRow(
             icon: Icons.location_on,
-            color: AppTheme.dangerRed,
+            color: _dangerRed,
             label: 'DROP-OFF',
-            address: trip.dropoffAddress,
+            address: trip.destinationAddress,
           ),
 
           if (trip.passenger != null) ...[
             const SizedBox(height: 16),
             Text(
-              'Passenger: ${trip.passenger!.fullName}',
+              'Passenger: ${trip.passengerName}',
               style: const TextStyle(fontSize: 15),
             ),
           ],
 
-          if (trip.deliveryNotes != null && trip.deliveryNotes!.isNotEmpty) ...[
+          if (trip.packageNotes != null && trip.packageNotes!.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              'Note: ${trip.deliveryNotes}',
+              'Note: ${trip.packageNotes}',
               style: TextStyle(
                 fontSize: 13,
                 color: Colors.grey[600],
@@ -277,8 +281,8 @@ class _IncomingJobContentState extends State<IncomingJobContent> {
                   child: OutlinedButton(
                     onPressed: _rejectJob,
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.dangerRed,
-                      side: const BorderSide(color: AppTheme.dangerRed),
+                      foregroundColor: _dangerRed,
+                      side: const BorderSide(color: _dangerRed),
                     ),
                     child: const Text(
                       'REJECT',
@@ -296,7 +300,7 @@ class _IncomingJobContentState extends State<IncomingJobContent> {
                   child: ElevatedButton(
                     onPressed: _acceptJob,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryGreen,
+                      backgroundColor: _primaryGreen,
                     ),
                     child: const Text(
                       'ACCEPT',

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../config/api.dart';
 import '../../services/trip_service.dart';
-import '../../services/socket_service.dart';
 
 class ActiveTripScreen extends StatefulWidget {
   final Map<String, dynamic> trip;
@@ -15,7 +14,6 @@ class ActiveTripScreen extends StatefulWidget {
 
 class _ActiveTripScreenState extends State<ActiveTripScreen> {
   late Map<String, dynamic> trip;
-  final TripService _tripService = TripService();
   final ImagePicker _picker = ImagePicker();
   bool _loading = false;
 
@@ -31,7 +29,8 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
   Future<void> _updateStatus(String action) async {
     setState(() => _loading = true);
     try {
-      final updated = await _tripService.updateTripStatus(trip['id'], action);
+      final tripService = context.read<TripService>();
+      final updated = await tripService.updateTripStatus(trip['id'], action);
       if (updated != null) {
         setState(() => trip = updated);
         if (action == 'complete') {
@@ -59,7 +58,8 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
 
     setState(() => _loading = true);
     try {
-      await _tripService.uploadDeliveryPhoto(trip['id'], phase, photo.path);
+      final tripService = context.read<TripService>();
+      await tripService.uploadDeliveryPhoto(trip['id'], phase, photo.path);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${phase == 'pickup' ? 'Pickup' : 'Drop-off'} photo uploaded')),

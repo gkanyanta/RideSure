@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../config/theme.dart';
 import '../../services/rider_service.dart';
 
 class VehicleScreen extends StatefulWidget {
@@ -14,12 +12,11 @@ class VehicleScreen extends StatefulWidget {
 
 class _VehicleScreenState extends State<VehicleScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _makeController = TextEditingController();
   final _modelController = TextEditingController();
-  final _yearController = TextEditingController();
   final _colorController = TextEditingController();
   final _plateController = TextEditingController();
-  final _engineSizeController = TextEditingController();
+
+  String? _selectedMake;
 
   // Common motorcycle makes in Zambia
   final _commonMakes = [
@@ -37,12 +34,9 @@ class _VehicleScreenState extends State<VehicleScreen> {
 
   @override
   void dispose() {
-    _makeController.dispose();
     _modelController.dispose();
-    _yearController.dispose();
     _colorController.dispose();
     _plateController.dispose();
-    _engineSizeController.dispose();
     super.dispose();
   }
 
@@ -51,21 +45,19 @@ class _VehicleScreenState extends State<VehicleScreen> {
 
     final rider = context.read<RiderService>();
     final success = await rider.submitVehicle(
-      make: _makeController.text.trim(),
+      make: _selectedMake,
       model: _modelController.text.trim(),
-      year: int.parse(_yearController.text.trim()),
-      color: _colorController.text.trim(),
-      plateNumber: _plateController.text.trim().toUpperCase(),
-      engineSize: _engineSizeController.text.trim().isNotEmpty
-          ? _engineSizeController.text.trim()
+      color: _colorController.text.trim().isNotEmpty
+          ? _colorController.text.trim()
           : null,
+      plateNumber: _plateController.text.trim().toUpperCase(),
     );
 
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Vehicle information saved!'),
-          backgroundColor: AppTheme.accentGreen,
+          backgroundColor: Color(0xFF4CAF50),
         ),
       );
       Navigator.pop(context);
@@ -73,7 +65,7 @@ class _VehicleScreenState extends State<VehicleScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(rider.error!),
-          backgroundColor: AppTheme.dangerRed,
+          backgroundColor: const Color(0xFFD32F2F),
         ),
       );
     }
@@ -111,7 +103,7 @@ class _VehicleScreenState extends State<VehicleScreen> {
                     .map((m) => DropdownMenuItem(value: m, child: Text(m)))
                     .toList(),
                 onChanged: (val) {
-                  _makeController.text = val ?? '';
+                  setState(() => _selectedMake = val);
                 },
                 validator: (val) =>
                     val == null || val.isEmpty ? 'Select a make' : null,
@@ -131,40 +123,14 @@ class _VehicleScreenState extends State<VehicleScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Year
-              TextFormField(
-                controller: _yearController,
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(4),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'Year',
-                  hintText: 'e.g. 2023',
-                  prefixIcon: Icon(Icons.calendar_today),
-                ),
-                validator: (val) {
-                  if (val == null || val.trim().isEmpty) return 'Enter the year';
-                  final year = int.tryParse(val);
-                  if (year == null || year < 2000 || year > 2030) {
-                    return 'Enter a valid year';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
               // Color
               TextFormField(
                 controller: _colorController,
                 decoration: const InputDecoration(
-                  labelText: 'Color',
+                  labelText: 'Color (optional)',
                   hintText: 'e.g. Black, Red, Blue',
                   prefixIcon: Icon(Icons.palette),
                 ),
-                validator: (val) =>
-                    val == null || val.trim().isEmpty ? 'Enter the color' : null,
               ),
               const SizedBox(height: 16),
 
@@ -180,17 +146,6 @@ class _VehicleScreenState extends State<VehicleScreen> {
                 validator: (val) => val == null || val.trim().isEmpty
                     ? 'Enter the plate number'
                     : null,
-              ),
-              const SizedBox(height: 16),
-
-              // Engine size (optional)
-              TextFormField(
-                controller: _engineSizeController,
-                decoration: const InputDecoration(
-                  labelText: 'Engine Size (optional)',
-                  hintText: 'e.g. 125cc, 150cc',
-                  prefixIcon: Icon(Icons.speed),
-                ),
               ),
               const SizedBox(height: 32),
 

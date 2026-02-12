@@ -35,7 +35,7 @@ class RiderService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _dio.get('/riders/me');
+      final response = await _dio.get('/riders/profile');
       _profile = RiderProfile.fromJson(response.data);
       _isLoading = false;
       notifyListeners();
@@ -43,6 +43,18 @@ class RiderService extends ChangeNotifier {
       _error = _extractError(e);
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Get profile as a raw map (used by profile screen).
+  Future<Map<String, dynamic>?> getProfile() async {
+    try {
+      final response = await _dio.get('/riders/profile');
+      _profile = RiderProfile.fromJson(response.data);
+      notifyListeners();
+      return response.data;
+    } catch (e) {
+      return null;
     }
   }
 
@@ -55,8 +67,8 @@ class RiderService extends ChangeNotifier {
 
     try {
       final newStatus = !_profile!.isOnline;
-      final response = await _dio.patch('/riders/me/status', data: {
-        'isOnline': newStatus,
+      final response = await _dio.put('/riders/online', data: {
+        'online': newStatus,
       });
 
       _profile = RiderProfile.fromJson(response.data);
@@ -74,16 +86,14 @@ class RiderService extends ChangeNotifier {
   /// Update rider location.
   Future<void> updateLocation(double lat, double lng) async {
     try {
-      await _dio.patch('/riders/me/location', data: {
-        'latitude': lat,
-        'longitude': lng,
+      await _dio.put('/riders/location', data: {
+        'lat': lat,
+        'lng': lng,
       });
-    } catch (e) {
-      print('Location update failed: $e');
-    }
+    } catch (_) {}
   }
 
-  /// Upload a document (NRC, selfie, licence, insurance).
+  /// Upload a document (NRC, SELFIE, RIDER_LICENCE, INSURANCE_CERTIFICATE).
   Future<bool> uploadDocument({
     required String type,
     required File file,
@@ -97,7 +107,6 @@ class RiderService extends ChangeNotifier {
 
     try {
       final formData = FormData.fromMap({
-        'type': type,
         'file': await MultipartFile.fromFile(
           file.path,
           filename: file.path.split('/').last,
@@ -107,9 +116,8 @@ class RiderService extends ChangeNotifier {
         if (expiryDate != null) 'expiryDate': expiryDate,
       });
 
-      await _dio.post('/riders/me/documents', data: formData);
+      await _dio.post('/riders/documents/$type', data: formData);
 
-      // Refresh profile to get updated document list
       await fetchProfile();
       return true;
     } on DioException catch (e) {
@@ -122,25 +130,21 @@ class RiderService extends ChangeNotifier {
 
   /// Submit vehicle information.
   Future<bool> submitVehicle({
-    required String make,
     required String model,
-    required int year,
-    required String color,
     required String plateNumber,
-    String? engineSize,
+    String? make,
+    String? color,
   }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await _dio.post('/riders/me/vehicle', data: {
-        'make': make,
+      await _dio.post('/riders/vehicle', data: {
         'model': model,
-        'year': year,
-        'color': color,
         'plateNumber': plateNumber,
-        if (engineSize != null) 'engineSize': engineSize,
+        if (make != null) 'make': make,
+        if (color != null) 'color': color,
       });
 
       await fetchProfile();
@@ -153,16 +157,12 @@ class RiderService extends ChangeNotifier {
     }
   }
 
-  /// Get earnings summary.
-  Future<Map<String, dynamic>?> getEarnings({
-    String period = 'week',
-  }) async {
+  /// Get insurance expiry warning.
+  Future<Map<String, dynamic>?> getInsuranceWarning() async {
     try {
-      final response = await _dio.get('/riders/me/earnings', queryParameters: {
-        'period': period,
-      });
+      final response = await _dio.get('/riders/insurance-warning');
       return response.data;
-    } catch (e) {
+    } catch (_) {
       return null;
     }
   }
@@ -170,6 +170,13 @@ class RiderService extends ChangeNotifier {
   String _extractError(DioException e) {
     if (e.response?.data != null && e.response!.data is Map) {
       return e.response!.data['message'] ?? 'Something went wrong';
+    }
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout) {
+      return 'Connection timed out. Check your internet.';
+    }
+    if (e.type == DioExceptionType.connectionError) {
+      return 'Cannot connect to server. Check your internet.';
     }
     return 'Something went wrong. Please try again.';
   }

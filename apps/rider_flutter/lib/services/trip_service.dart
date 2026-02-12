@@ -26,153 +26,90 @@ class TripService extends ChangeNotifier {
     _auth = auth;
   }
 
-  /// Set active trip from socket event or API response.
+  /// Set active trip from socket event.
   void setActiveTrip(Trip? trip) {
     _activeTrip = trip;
     notifyListeners();
   }
 
-  /// Fetch current active trip if any.
-  Future<void> fetchActiveTrip() async {
+  /// Set active trip from raw JSON (socket events).
+  void setActiveTripFromJson(Map<String, dynamic> json) {
+    _activeTrip = Trip.fromJson(json);
+    notifyListeners();
+  }
+
+  /// Get trip details by ID.
+  Future<Map<String, dynamic>?> getTripDetails(String tripId) async {
     try {
-      final response = await _dio.get('/trips/active');
-      if (response.data != null && response.data['id'] != null) {
-        _activeTrip = Trip.fromJson(response.data);
-      } else {
-        _activeTrip = null;
-      }
-      notifyListeners();
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 404) {
-        _activeTrip = null;
-        notifyListeners();
-      }
+      final response = await _dio.get('/trips/$tripId');
+      return response.data;
+    } catch (_) {
+      return null;
     }
   }
 
-  /// Accept a trip offer.
-  Future<bool> acceptTrip(String tripId) async {
+  /// Update trip status (arrived, start, complete).
+  Future<Map<String, dynamic>?> updateTripStatus(String tripId, String action) async {
     _isLoading = true;
-    _error = null;
     notifyListeners();
 
     try {
-      final response = await _dio.post('/trips/$tripId/accept');
-      _activeTrip = Trip.fromJson(response.data);
+      final response = await _dio.patch('/trips/$tripId/$action');
+      final data = response.data as Map<String, dynamic>;
+
+      if (action == 'complete') {
+        _activeTrip = null;
+      } else {
+        _activeTrip = Trip.fromJson(data);
+      }
+
       _isLoading = false;
       notifyListeners();
-      return true;
+      return data;
     } on DioException catch (e) {
       _error = _extractError(e);
       _isLoading = false;
       notifyListeners();
-      return false;
-    }
-  }
-
-  /// Reject a trip offer.
-  Future<bool> rejectTrip(String tripId) async {
-    try {
-      await _dio.post('/trips/$tripId/reject');
-      return true;
-    } catch (e) {
-      return false;
+      return null;
     }
   }
 
   /// Mark arrived at pickup.
   Future<bool> markArrived() async {
     if (_activeTrip == null) return false;
-
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      final response =
-          await _dio.post('/trips/${_activeTrip!.id}/arrived');
-      _activeTrip = Trip.fromJson(response.data);
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } on DioException catch (e) {
-      _error = _extractError(e);
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
+    final result = await updateTripStatus(_activeTrip!.id, 'arrived');
+    return result != null;
   }
 
   /// Start the trip.
   Future<bool> startTrip() async {
     if (_activeTrip == null) return false;
-
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      final response =
-          await _dio.post('/trips/${_activeTrip!.id}/start');
-      _activeTrip = Trip.fromJson(response.data);
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } on DioException catch (e) {
-      _error = _extractError(e);
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
+    final result = await updateTripStatus(_activeTrip!.id, 'start');
+    return result != null;
   }
 
   /// Complete the trip.
   Future<bool> completeTrip() async {
     if (_activeTrip == null) return false;
-
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      final response =
-          await _dio.post('/trips/${_activeTrip!.id}/complete');
-      _activeTrip = null;
-      _isLoading = false;
-      notifyListeners();
-      // Refresh history
-      fetchTripHistory();
-      return true;
-    } on DioException catch (e) {
-      _error = _extractError(e);
-      _isLoading = false;
-      notifyListeners();
-      return false;
-    }
+    final result = await updateTripStatus(_activeTrip!.id, 'complete');
+    if (result != null) fetchTripHistory();
+    return result != null;
   }
 
   /// Upload delivery photo (pickup or dropoff).
-  Future<bool> uploadDeliveryPhoto({
-    required String photoType, // 'pickup' or 'dropoff'
-    required File file,
-  }) async {
-    if (_activeTrip == null) return false;
-
+  Future<bool> uploadDeliveryPhoto(String tripId, String phase, String filePath) async {
     _isLoading = true;
     notifyListeners();
 
     try {
       final formData = FormData.fromMap({
-        'type': photoType,
-        'file': await MultipartFile.fromFile(
-          file.path,
-          filename: file.path.split('/').last,
+        'photo': await MultipartFile.fromFile(
+          filePath,
+          filename: filePath.split('/').last,
         ),
       });
 
-      final response = await _dio.post(
-        '/trips/${_activeTrip!.id}/photo',
-        data: formData,
-      );
-
-      _activeTrip = Trip.fromJson(response.data);
+      await _dio.post('/trips/$tripId/delivery-photo/$phase', data: formData);
       _isLoading = false;
       notifyListeners();
       return true;
@@ -184,18 +121,14 @@ class TripService extends ChangeNotifier {
     }
   }
 
-  /// Fetch trip history.
-  Future<void> fetchTripHistory({int page = 1, int limit = 20}) async {
+  /// Fetch rider trip history.
+  Future<void> fetchTripHistory() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final response = await _dio.get('/trips/history', queryParameters: {
-        'page': page,
-        'limit': limit,
-      });
-
-      final List data = response.data['trips'] ?? response.data ?? [];
+      final response = await _dio.get('/trips/rider/my');
+      final List data = response.data is List ? response.data : [];
       _tripHistory = data.map((t) => Trip.fromJson(t)).toList();
       _isLoading = false;
       notifyListeners();
@@ -203,6 +136,16 @@ class TripService extends ChangeNotifier {
       _error = _extractError(e);
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Get rider trips as raw list (used by trip history screen).
+  Future<List<dynamic>> getRiderTrips() async {
+    try {
+      final response = await _dio.get('/trips/rider/my');
+      return response.data is List ? response.data : [];
+    } catch (_) {
+      return [];
     }
   }
 
@@ -214,7 +157,7 @@ class TripService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _dio.post('/trips/${_activeTrip!.id}/cancel', data: {
+      await _dio.patch('/trips/${_activeTrip!.id}/cancel', data: {
         'reason': reason,
       });
       _activeTrip = null;

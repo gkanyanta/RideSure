@@ -43,55 +43,52 @@ class User {
 
 class Rider {
   final String id;
-  final String name;
-  final String phone;
+  final String? name;
+  final String? phone;
   final String? profilePhoto;
-  final double rating;
-  final int tripCount;
-  final bool isVerified;
-  final bool isInsured;
-  final String? insuranceExpiry;
+  final double avgRating;
+  final int totalTrips;
+  final bool isOnline;
   final Vehicle? vehicle;
+  final Map<String, dynamic>? user;
 
   Rider({
     required this.id,
-    required this.name,
-    required this.phone,
+    this.name,
+    this.phone,
     this.profilePhoto,
-    this.rating = 0.0,
-    this.tripCount = 0,
-    this.isVerified = false,
-    this.isInsured = false,
-    this.insuranceExpiry,
+    this.avgRating = 0.0,
+    this.totalTrips = 0,
+    this.isOnline = false,
     this.vehicle,
+    this.user,
   });
+
+  String get displayName => user?['name'] ?? name ?? 'Rider';
+  String get displayPhone => user?['phone'] ?? phone ?? '';
 
   factory Rider.fromJson(Map<String, dynamic> json) {
     return Rider(
       id: json['id'] ?? json['_id'] ?? '',
-      name: json['name'] ?? 'Unknown Rider',
-      phone: json['phone'] ?? '',
+      name: json['name'] ?? json['user']?['name'],
+      phone: json['phone'] ?? json['user']?['phone'],
       profilePhoto: json['profilePhoto'],
-      rating: (json['rating'] ?? 0).toDouble(),
-      tripCount: json['tripCount'] ?? json['trip_count'] ?? 0,
-      isVerified: json['isVerified'] ?? json['is_verified'] ?? false,
-      isInsured: json['isInsured'] ?? json['is_insured'] ?? false,
-      insuranceExpiry: json['insuranceExpiry'] ?? json['insurance_expiry'],
+      avgRating: (json['avgRating'] ?? json['rating'] ?? 0).toDouble(),
+      totalTrips: json['totalTrips'] ?? json['tripCount'] ?? 0,
+      isOnline: json['isOnline'] ?? false,
       vehicle:
           json['vehicle'] != null ? Vehicle.fromJson(json['vehicle']) : null,
+      user: json['user'] is Map<String, dynamic> ? json['user'] : null,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'id': id,
-        'name': name,
-        'phone': phone,
+        'name': displayName,
+        'phone': displayPhone,
         'profilePhoto': profilePhoto,
-        'rating': rating,
-        'tripCount': tripCount,
-        'isVerified': isVerified,
-        'isInsured': isInsured,
-        'insuranceExpiry': insuranceExpiry,
+        'avgRating': avgRating,
+        'totalTrips': totalTrips,
         'vehicle': vehicle?.toJson(),
       };
 }
@@ -101,14 +98,12 @@ class Vehicle {
   final String? model;
   final String? color;
   final String? plateNumber;
-  final int? year;
 
   Vehicle({
     this.make,
     this.model,
     this.color,
     this.plateNumber,
-    this.year,
   });
 
   factory Vehicle.fromJson(Map<String, dynamic> json) {
@@ -117,7 +112,6 @@ class Vehicle {
       model: json['model'],
       color: json['color'],
       plateNumber: json['plateNumber'] ?? json['plate_number'],
-      year: json['year'],
     );
   }
 
@@ -126,7 +120,6 @@ class Vehicle {
         'model': model,
         'color': color,
         'plateNumber': plateNumber,
-        'year': year,
       };
 
   String get displayName {
@@ -142,6 +135,8 @@ enum TripType { RIDE, DELIVERY }
 
 enum TripStatus {
   SEARCHING,
+  REQUESTED,
+  OFFERED,
   ACCEPTED,
   ARRIVED,
   IN_PROGRESS,
@@ -170,25 +165,6 @@ class LatLng {
       };
 }
 
-class TripLocation {
-  final LatLng coordinates;
-  final String? address;
-
-  TripLocation({required this.coordinates, this.address});
-
-  factory TripLocation.fromJson(Map<String, dynamic> json) {
-    return TripLocation(
-      coordinates: LatLng.fromJson(json['coordinates'] ?? json),
-      address: json['address'],
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'coordinates': coordinates.toJson(),
-        'address': address,
-      };
-}
-
 class FareEstimate {
   final double minFare;
   final double maxFare;
@@ -206,10 +182,10 @@ class FareEstimate {
 
   factory FareEstimate.fromJson(Map<String, dynamic> json) {
     return FareEstimate(
-      minFare: (json['minFare'] ?? json['min_fare'] ?? 0).toDouble(),
-      maxFare: (json['maxFare'] ?? json['max_fare'] ?? 0).toDouble(),
+      minFare: (json['minFare'] ?? json['estimatedFareLow'] ?? json['min_fare'] ?? 0).toDouble(),
+      maxFare: (json['maxFare'] ?? json['estimatedFareHigh'] ?? json['max_fare'] ?? 0).toDouble(),
       estimatedDistance:
-          (json['estimatedDistance'] ?? json['estimated_distance'] ?? 0)
+          (json['estimatedDistance'] ?? json['distance'] ?? json['estimated_distance'] ?? 0)
               .toDouble(),
       estimatedDuration: json['estimatedDuration'] ??
           json['estimated_duration'] ??
@@ -221,63 +197,116 @@ class FareEstimate {
   String get displayRange => 'K${minFare.toStringAsFixed(2)} - K${maxFare.toStringAsFixed(2)}';
 }
 
+/// Trip model matching the backend flat JSON format.
 class Trip {
   final String id;
   final TripType type;
   final TripStatus status;
-  final TripLocation pickup;
-  final TripLocation destination;
-  final Rider? rider;
-  final double? fare;
-  final FareEstimate? fareEstimate;
+  final double pickupLat;
+  final double pickupLng;
+  final String pickupAddress;
+  final String? pickupLandmark;
+  final double destinationLat;
+  final double destinationLng;
+  final String destinationAddress;
+  final String? destinationLandmark;
+  final double? estimatedDistance;
+  final double? estimatedFareLow;
+  final double? estimatedFareHigh;
+  final double? actualFare;
+  final String? packageType;
+  final String? packageNotes;
   final String? shareCode;
-  final int? rating;
-  final String? ratingComment;
-  final DeliveryDetails? deliveryDetails;
+  final String? cancelReason;
+  final Rider? rider;
+  final Map<String, dynamic>? passenger;
   final DateTime? createdAt;
   final DateTime? completedAt;
+  // Rating data (from included ratings relation)
+  final int? ratingScore;
+  final String? ratingComment;
 
   Trip({
     required this.id,
     required this.type,
     required this.status,
-    required this.pickup,
-    required this.destination,
-    this.rider,
-    this.fare,
-    this.fareEstimate,
+    required this.pickupLat,
+    required this.pickupLng,
+    required this.pickupAddress,
+    this.pickupLandmark,
+    required this.destinationLat,
+    required this.destinationLng,
+    required this.destinationAddress,
+    this.destinationLandmark,
+    this.estimatedDistance,
+    this.estimatedFareLow,
+    this.estimatedFareHigh,
+    this.actualFare,
+    this.packageType,
+    this.packageNotes,
     this.shareCode,
-    this.rating,
-    this.ratingComment,
-    this.deliveryDetails,
+    this.cancelReason,
+    this.rider,
+    this.passenger,
     this.createdAt,
     this.completedAt,
+    this.ratingScore,
+    this.ratingComment,
   });
 
+  bool get isDelivery => type == TripType.DELIVERY;
+
+  String get passengerName => passenger?['name'] ?? passenger?['phone'] ?? 'Passenger';
+  String get riderName => rider?.displayName ?? 'Rider';
+
+  String get fareRange {
+    if (estimatedFareLow != null && estimatedFareHigh != null) {
+      return 'K${estimatedFareLow!.toStringAsFixed(0)} - K${estimatedFareHigh!.toStringAsFixed(0)}';
+    }
+    if (actualFare != null) return 'K${actualFare!.toStringAsFixed(0)}';
+    return 'Calculating...';
+  }
+
   factory Trip.fromJson(Map<String, dynamic> json) {
+    // Extract rating from nested ratings list if present
+    int? ratingScore;
+    String? ratingComment;
+    if (json['ratings'] is List && (json['ratings'] as List).isNotEmpty) {
+      final rating = (json['ratings'] as List).first;
+      ratingScore = rating['score'];
+      ratingComment = rating['comment'];
+    }
+
     return Trip(
       id: json['id'] ?? json['_id'] ?? '',
       type: _parseTripType(json['type']),
       status: _parseTripStatus(json['status']),
-      pickup: TripLocation.fromJson(json['pickup']),
-      destination: TripLocation.fromJson(json['destination']),
+      pickupLat: (json['pickupLat'] as num?)?.toDouble() ?? 0,
+      pickupLng: (json['pickupLng'] as num?)?.toDouble() ?? 0,
+      pickupAddress: json['pickupAddress'] ?? '',
+      pickupLandmark: json['pickupLandmark'],
+      destinationLat: (json['destinationLat'] as num?)?.toDouble() ?? 0,
+      destinationLng: (json['destinationLng'] as num?)?.toDouble() ?? 0,
+      destinationAddress: json['destinationAddress'] ?? '',
+      destinationLandmark: json['destinationLandmark'],
+      estimatedDistance: (json['estimatedDistance'] as num?)?.toDouble(),
+      estimatedFareLow: (json['estimatedFareLow'] as num?)?.toDouble(),
+      estimatedFareHigh: (json['estimatedFareHigh'] as num?)?.toDouble(),
+      actualFare: (json['actualFare'] as num?)?.toDouble(),
+      packageType: json['packageType'],
+      packageNotes: json['packageNotes'],
+      shareCode: json['shareCode'],
+      cancelReason: json['cancelReason'],
       rider: json['rider'] != null ? Rider.fromJson(json['rider']) : null,
-      fare: json['fare'] != null ? (json['fare']).toDouble() : null,
-      fareEstimate: json['fareEstimate'] != null
-          ? FareEstimate.fromJson(json['fareEstimate'])
-          : null,
-      shareCode: json['shareCode'] ?? json['share_code'],
-      rating: json['rating'],
-      ratingComment: json['ratingComment'] ?? json['rating_comment'],
-      deliveryDetails: json['deliveryDetails'] != null
-          ? DeliveryDetails.fromJson(json['deliveryDetails'])
-          : null,
+      passenger: json['passenger'] is Map<String, dynamic> ? json['passenger'] : null,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'])
           : null,
       completedAt: json['completedAt'] != null
           ? DateTime.tryParse(json['completedAt'])
           : null,
+      ratingScore: ratingScore,
+      ratingComment: ratingComment,
     );
   }
 
@@ -294,6 +323,10 @@ class Trip {
     switch (status?.toUpperCase()) {
       case 'SEARCHING':
         return TripStatus.SEARCHING;
+      case 'REQUESTED':
+        return TripStatus.REQUESTED;
+      case 'OFFERED':
+        return TripStatus.OFFERED;
       case 'ACCEPTED':
         return TripStatus.ACCEPTED;
       case 'ARRIVED':
@@ -314,26 +347,37 @@ class Trip {
   Trip copyWith({
     TripStatus? status,
     Rider? rider,
-    double? fare,
+    double? actualFare,
     String? shareCode,
-    int? rating,
+    int? ratingScore,
     String? ratingComment,
   }) {
     return Trip(
       id: id,
       type: type,
       status: status ?? this.status,
-      pickup: pickup,
-      destination: destination,
-      rider: rider ?? this.rider,
-      fare: fare ?? this.fare,
-      fareEstimate: fareEstimate,
+      pickupLat: pickupLat,
+      pickupLng: pickupLng,
+      pickupAddress: pickupAddress,
+      pickupLandmark: pickupLandmark,
+      destinationLat: destinationLat,
+      destinationLng: destinationLng,
+      destinationAddress: destinationAddress,
+      destinationLandmark: destinationLandmark,
+      estimatedDistance: estimatedDistance,
+      estimatedFareLow: estimatedFareLow,
+      estimatedFareHigh: estimatedFareHigh,
+      actualFare: actualFare ?? this.actualFare,
+      packageType: packageType,
+      packageNotes: packageNotes,
       shareCode: shareCode ?? this.shareCode,
-      rating: rating ?? this.rating,
-      ratingComment: ratingComment ?? this.ratingComment,
-      deliveryDetails: deliveryDetails,
+      cancelReason: cancelReason,
+      rider: rider ?? this.rider,
+      passenger: passenger,
       createdAt: createdAt,
       completedAt: completedAt,
+      ratingScore: ratingScore ?? this.ratingScore,
+      ratingComment: ratingComment ?? this.ratingComment,
     );
   }
 }
@@ -350,7 +394,7 @@ class DeliveryDetails {
   factory DeliveryDetails.fromJson(Map<String, dynamic> json) {
     return DeliveryDetails(
       packageType: json['packageType'] ?? json['package_type'] ?? '',
-      notes: json['notes'],
+      notes: json['notes'] ?? json['packageNotes'],
     );
   }
 

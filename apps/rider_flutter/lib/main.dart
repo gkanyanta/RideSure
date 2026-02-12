@@ -56,7 +56,10 @@ class RideSureRiderApp extends StatelessWidget {
           '/vehicle': (context) => const VehicleScreen(),
           '/home': (context) => const HomeScreen(),
           '/incoming-job': (context) => const IncomingJobScreen(),
-          '/active-trip': (context) => const ActiveTripScreen(),
+          '/active-trip': (context) {
+            final trip = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+            return ActiveTripScreen(trip: trip);
+          },
           '/trip-history': (context) => const TripHistoryScreen(),
           '/profile': (context) => const ProfileScreen(),
         },

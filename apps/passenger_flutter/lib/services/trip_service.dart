@@ -15,7 +15,8 @@ class TripService extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  /// Get fare estimate for a trip
+  /// Get fare estimate for a trip.
+  /// Backend expects flat lat/lng fields, not nested objects.
   Future<FareEstimate?> getFareEstimate({
     required LatLng pickup,
     required LatLng destination,
@@ -27,9 +28,10 @@ class TripService extends ChangeNotifier {
 
     try {
       final response = await ApiConfig.dio.post('/trips/estimate', data: {
-        'pickup': pickup.toJson(),
-        'destination': destination.toJson(),
-        'type': type == TripType.DELIVERY ? 'DELIVERY' : 'RIDE',
+        'pickupLat': pickup.latitude,
+        'pickupLng': pickup.longitude,
+        'destinationLat': destination.latitude,
+        'destinationLng': destination.longitude,
       });
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -51,27 +53,38 @@ class TripService extends ChangeNotifier {
     }
   }
 
-  /// Request a new trip
+  /// Request a new trip.
+  /// Backend expects flat fields matching CreateTripDto.
   Future<Trip?> requestTrip({
-    required TripLocation pickup,
-    required TripLocation destination,
+    required LatLng pickup,
+    required LatLng destination,
+    required String pickupAddress,
+    required String destinationAddress,
     required TripType type,
-    DeliveryDetails? deliveryDetails,
+    String? pickupLandmark,
+    String? destinationLandmark,
+    String? packageType,
+    String? packageNotes,
   }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final data = {
-        'pickup': pickup.toJson(),
-        'destination': destination.toJson(),
+      final data = <String, dynamic>{
+        'pickupLat': pickup.latitude,
+        'pickupLng': pickup.longitude,
+        'pickupAddress': pickupAddress,
+        'destinationLat': destination.latitude,
+        'destinationLng': destination.longitude,
+        'destinationAddress': destinationAddress,
         'type': type == TripType.DELIVERY ? 'DELIVERY' : 'RIDE',
       };
 
-      if (deliveryDetails != null) {
-        data['deliveryDetails'] = deliveryDetails.toJson();
-      }
+      if (pickupLandmark != null) data['pickupLandmark'] = pickupLandmark;
+      if (destinationLandmark != null) data['destinationLandmark'] = destinationLandmark;
+      if (packageType != null) data['packageType'] = packageType;
+      if (packageNotes != null) data['packageNotes'] = packageNotes;
 
       final response = await ApiConfig.dio.post('/trips', data: data);
 
@@ -94,15 +107,40 @@ class TripService extends ChangeNotifier {
     }
   }
 
-  /// Get current active trip
+  /// Get current active trip by fetching passenger's trips and finding active one.
   Future<Trip?> getCurrentTrip() async {
     try {
-      final response = await ApiConfig.dio.get('/trips/current');
+      final response = await ApiConfig.dio.get('/trips/my');
 
       if (response.statusCode == 200 && response.data != null) {
-        _currentTrip = Trip.fromJson(response.data);
-        notifyListeners();
-        return _currentTrip;
+        final List<dynamic> data = response.data is List
+            ? response.data
+            : [];
+        // Find the most recent active trip
+        for (final tripJson in data) {
+          final status = tripJson['status']?.toString().toUpperCase();
+          if (status == 'REQUESTED' ||
+              status == 'OFFERED' ||
+              status == 'ACCEPTED' ||
+              status == 'ARRIVED' ||
+              status == 'IN_PROGRESS') {
+            _currentTrip = Trip.fromJson(tripJson);
+            notifyListeners();
+            return _currentTrip;
+          }
+        }
+        // Check for recently completed trip that needs rating
+        for (final tripJson in data) {
+          final status = tripJson['status']?.toString().toUpperCase();
+          if (status == 'COMPLETED') {
+            final trip = Trip.fromJson(tripJson);
+            if (trip.ratingScore == null) {
+              _currentTrip = trip;
+              notifyListeners();
+              return _currentTrip;
+            }
+          }
+        }
       }
       return null;
     } catch (e) {
@@ -110,7 +148,7 @@ class TripService extends ChangeNotifier {
     }
   }
 
-  /// Get trip by ID
+  /// Get trip by ID.
   Future<Trip?> getTripById(String tripId) async {
     try {
       final response = await ApiConfig.dio.get('/trips/$tripId');
@@ -124,14 +162,15 @@ class TripService extends ChangeNotifier {
     }
   }
 
-  /// Cancel a trip
+  /// Cancel a trip. Backend uses PATCH, not POST.
   Future<bool> cancelTrip(String tripId) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final response =
-          await ApiConfig.dio.post('/trips/$tripId/cancel');
+      final response = await ApiConfig.dio.patch('/trips/$tripId/cancel', data: {
+        'reason': 'Cancelled by passenger',
+      });
 
       if (response.statusCode == 200) {
         _currentTrip = null;
@@ -151,13 +190,13 @@ class TripService extends ChangeNotifier {
     }
   }
 
-  /// Rate a trip
+  /// Rate a trip. Backend expects 'score', not 'rating'.
   Future<bool> rateTrip(String tripId, int stars, {String? comment}) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final data = <String, dynamic>{'rating': stars};
+      final data = <String, dynamic>{'score': stars};
       if (comment != null && comment.isNotEmpty) {
         data['comment'] = comment;
       }
@@ -168,7 +207,7 @@ class TripService extends ChangeNotifier {
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (_currentTrip != null && _currentTrip!.id == tripId) {
           _currentTrip =
-              _currentTrip!.copyWith(rating: stars, ratingComment: comment);
+              _currentTrip!.copyWith(ratingScore: stars, ratingComment: comment);
         }
         _isLoading = false;
         notifyListeners();
@@ -186,23 +225,25 @@ class TripService extends ChangeNotifier {
     }
   }
 
-  /// Send SOS alert
-  Future<bool> sendSos(String tripId) async {
+  /// Send SOS alert.
+  Future<bool> sendSos(String tripId, {String? description}) async {
     try {
-      final response = await ApiConfig.dio.post('/trips/$tripId/sos');
+      final response = await ApiConfig.dio.post('/trips/$tripId/sos', data: {
+        'description': description ?? 'SOS triggered by passenger',
+      });
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       return false;
     }
   }
 
-  /// Load trip history
+  /// Load trip history. Backend endpoint is /trips/my for passengers.
   Future<void> loadTripHistory() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final response = await ApiConfig.dio.get('/trips/history');
+      final response = await ApiConfig.dio.get('/trips/my');
 
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data is List
@@ -218,21 +259,33 @@ class TripService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Update current trip from socket event
+  /// Get raw trip list for history screen.
+  Future<List<dynamic>> getMyTrips() async {
+    try {
+      final response = await ApiConfig.dio.get('/trips/my');
+      return response.data is List ? response.data : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Update current trip from socket event.
   void updateTripFromSocket(Map<String, dynamic> data) {
-    if (data.containsKey('status')) {
-      final status = Trip.fromJson(data).status;
-      if (_currentTrip != null) {
-        _currentTrip = _currentTrip!.copyWith(
-          status: status,
-          rider: data['rider'] != null ? Rider.fromJson(data['rider']) : null,
-          fare: data['fare'] != null ? (data['fare']).toDouble() : null,
-          shareCode: data['shareCode'] ?? data['share_code'],
-        );
-      } else {
-        _currentTrip = Trip.fromJson(data);
-      }
-      notifyListeners();
+    if (data.containsKey('status') || data.containsKey('id')) {
+      try {
+        final trip = Trip.fromJson(data);
+        if (_currentTrip != null) {
+          _currentTrip = _currentTrip!.copyWith(
+            status: trip.status,
+            rider: trip.rider ?? _currentTrip!.rider,
+            actualFare: trip.actualFare,
+            shareCode: trip.shareCode ?? _currentTrip!.shareCode,
+          );
+        } else {
+          _currentTrip = trip;
+        }
+        notifyListeners();
+      } catch (_) {}
     }
   }
 

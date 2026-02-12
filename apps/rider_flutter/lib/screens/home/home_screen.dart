@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../config/theme.dart';
 import '../../models/user.dart';
 import '../../services/auth_service.dart';
 import '../../services/rider_service.dart';
@@ -40,28 +39,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _initialize() async {
-    // Setup socket callbacks
     final socket = context.read<SocketService>();
     socket.onTripOffer = _handleTripOffer;
     socket.onTripUpdate = _handleTripUpdate;
     socket.onTripCancelled = _handleTripCancelled;
 
-    // Connect socket
     if (!socket.isConnected) {
       socket.connect();
     }
 
-    // Setup location tracking
     final location = context.read<LocationService>();
     await location.checkPermissions();
 
-    // Fetch data
     _refreshData();
   }
 
   void _handleTripOffer(TripOffer offer) {
     if (!mounted) return;
-    // Show incoming job overlay
     showModalBottomSheet(
       context: context,
       isDismissible: false,
@@ -74,8 +68,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _handleTripUpdate(Trip trip) {
     if (!mounted) return;
-    final tripService = context.read<TripService>();
-    tripService.setActiveTrip(trip);
+    context.read<TripService>().setActiveTrip(trip);
   }
 
   void _handleTripCancelled(String tripId) {
@@ -91,9 +84,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _refreshData() async {
     final rider = context.read<RiderService>();
-    final tripService = context.read<TripService>();
     await rider.fetchProfile();
-    await tripService.fetchActiveTrip();
   }
 
   Future<void> _toggleOnline() async {
@@ -102,13 +93,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final socket = context.read<SocketService>();
 
     if (!rider.isOnline) {
-      // Going online - get location first
       final pos = await location.getCurrentPosition();
       if (pos == null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Cannot go online without location access'),
-            backgroundColor: AppTheme.dangerRed,
+            backgroundColor: Colors.red,
           ),
         );
         return;
@@ -116,15 +106,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       final success = await rider.toggleOnlineStatus();
       if (success) {
-        // Start location tracking
         location.onLocationUpdate = (lat, lng) {
           rider.updateLocation(lat, lng);
           socket.sendLocation(lat, lng);
         };
         await location.startTracking();
+      } else if (mounted && rider.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(rider.error!), backgroundColor: Colors.red),
+        );
       }
     } else {
-      // Going offline
       final success = await rider.toggleOnlineStatus();
       if (success) {
         location.stopTracking();
@@ -138,16 +130,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         title: const Text('RideSure Rider'),
+        backgroundColor: const Color(0xFF1B5E20),
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
             onPressed: () => Navigator.pushNamed(context, '/trip-history'),
-            tooltip: 'Trip History',
           ),
           IconButton(
             icon: const Icon(Icons.person),
             onPressed: () => Navigator.pushNamed(context, '/profile'),
-            tooltip: 'Profile',
           ),
         ],
       ),
@@ -159,8 +151,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               padding: const EdgeInsets.all(16),
               children: [
                 // Insurance warning
-                if (rider.profile?.insurance != null)
-                  InsuranceWarning(insurance: rider.profile!.insurance!),
+                if (rider.profile?.insuranceDoc != null &&
+                    rider.profile!.insuranceDoc!.isExpiringSoon)
+                  InsuranceWarningWidget(
+                    daysRemaining: rider.profile!.insuranceDoc!.daysUntilExpiry,
+                    message: rider.profile!.insuranceDoc!.isExpired
+                        ? 'Insurance has EXPIRED!'
+                        : 'Insurance expires in ${rider.profile!.insuranceDoc!.daysUntilExpiry} days',
+                  ),
 
                 // Online/Offline toggle
                 _buildOnlineToggle(rider),
@@ -170,33 +168,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 Consumer<SocketService>(
                   builder: (context, socket, _) {
                     return _buildStatusRow(
-                      icon: socket.isConnected
-                          ? Icons.wifi
-                          : Icons.wifi_off,
-                      label: socket.isConnected
-                          ? 'Connected to server'
-                          : 'Disconnected',
-                      color: socket.isConnected
-                          ? AppTheme.accentGreen
-                          : AppTheme.dangerRed,
+                      icon: socket.isConnected ? Icons.wifi : Icons.wifi_off,
+                      label: socket.isConnected ? 'Connected to server' : 'Disconnected',
+                      color: socket.isConnected ? Colors.green : Colors.red,
                     );
                   },
                 ),
                 const SizedBox(height: 8),
 
-                // Location status
                 Consumer<LocationService>(
                   builder: (context, location, _) {
                     return _buildStatusRow(
-                      icon: location.isTracking
-                          ? Icons.my_location
-                          : Icons.location_off,
-                      label: location.isTracking
-                          ? 'GPS active'
-                          : 'GPS inactive',
-                      color: location.isTracking
-                          ? AppTheme.accentGreen
-                          : Colors.grey,
+                      icon: location.isTracking ? Icons.my_location : Icons.location_off,
+                      label: location.isTracking ? 'GPS active' : 'GPS inactive',
+                      color: location.isTracking ? Colors.green : Colors.grey,
                     );
                   },
                 ),
@@ -206,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 if (tripService.hasActiveTrip)
                   _buildActiveTripCard(tripService.activeTrip!),
 
-                // Today's stats
+                // Stats + waiting
                 if (!tripService.hasActiveTrip) ...[
                   _buildStatsCard(rider),
                   const SizedBox(height: 16),
@@ -222,9 +207,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildOnlineToggle(RiderService rider) {
     final isOnline = rider.isOnline;
-
     return Card(
-      color: isOnline ? AppTheme.primaryGreen : Colors.white,
+      color: isOnline ? const Color(0xFF1B5E20) : Colors.white,
       child: InkWell(
         onTap: rider.isToggling ? null : _toggleOnline,
         borderRadius: BorderRadius.circular(12),
@@ -235,11 +219,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               if (rider.isToggling)
                 SizedBox(
-                  height: 24,
-                  width: 24,
+                  height: 24, width: 24,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: isOnline ? Colors.white : AppTheme.primaryGreen,
+                    color: isOnline ? Colors.white : const Color(0xFF1B5E20),
                   ),
                 )
               else
@@ -255,15 +238,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   Text(
                     isOnline ? 'YOU ARE ONLINE' : 'YOU ARE OFFLINE',
                     style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 20, fontWeight: FontWeight.bold,
                       color: isOnline ? Colors.white : Colors.grey[800],
                     ),
                   ),
                   Text(
-                    isOnline
-                        ? 'Waiting for ride requests...'
-                        : 'Tap to go online and start earning',
+                    isOnline ? 'Waiting for ride requests...' : 'Tap to go online and start earning',
                     style: TextStyle(
                       fontSize: 14,
                       color: isOnline ? Colors.white70 : Colors.grey[600],
@@ -278,11 +258,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildStatusRow({
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
+  Widget _buildStatusRow({required IconData icon, required String label, required Color color}) {
     return Row(
       children: [
         Icon(icon, size: 18, color: color),
@@ -294,9 +270,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildActiveTripCard(Trip trip) {
     return Card(
-      color: AppTheme.primaryGreenLight,
+      color: const Color(0xFF2E7D32),
       child: InkWell(
-        onTap: () => Navigator.pushNamed(context, '/active-trip'),
+        onTap: () => Navigator.pushNamed(context, '/active-trip', arguments: {
+          'id': trip.id,
+          'type': trip.type,
+          'status': trip.status,
+          'pickupAddress': trip.pickupAddress,
+          'destinationAddress': trip.destinationAddress,
+          'estimatedFareLow': trip.estimatedFareLow,
+          'estimatedFareHigh': trip.estimatedFareHigh,
+          'passenger': trip.passenger,
+          'packageType': trip.packageType,
+          'packageNotes': trip.packageNotes,
+          'destinationLat': trip.destinationLat,
+          'destinationLng': trip.destinationLng,
+        }),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -305,59 +294,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               Row(
                 children: [
-                  Icon(
-                    trip.isDelivery ? Icons.inventory : Icons.person,
-                    color: Colors.white,
-                  ),
+                  Icon(trip.isDelivery ? Icons.inventory : Icons.person, color: Colors.white),
                   const SizedBox(width: 8),
                   Text(
                     'Active ${trip.isDelivery ? "Delivery" : "Ride"}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const Spacer(),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(
-                      trip.status.replaceAll('_', ' '),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                      ),
-                    ),
+                    child: Text(trip.status.replaceAll('_', ' '),
+                        style: const TextStyle(color: Colors.white, fontSize: 12)),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              if (trip.passenger != null)
-                Text(
-                  'Passenger: ${trip.passenger!.fullName}',
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
-                ),
+              Text('Passenger: ${trip.passengerName}',
+                  style: const TextStyle(color: Colors.white, fontSize: 15)),
               const SizedBox(height: 4),
-              Text(
-                trip.pickupAddress,
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              Text(trip.pickupAddress,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () =>
-                      Navigator.pushNamed(context, '/active-trip'),
+                  onPressed: () => Navigator.pushNamed(context, '/active-trip', arguments: {
+                    'id': trip.id, 'type': trip.type, 'status': trip.status,
+                    'pickupAddress': trip.pickupAddress, 'destinationAddress': trip.destinationAddress,
+                    'estimatedFareLow': trip.estimatedFareLow, 'estimatedFareHigh': trip.estimatedFareHigh,
+                    'passenger': trip.passenger, 'destinationLat': trip.destinationLat,
+                    'destinationLng': trip.destinationLng,
+                  }),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
-                    foregroundColor: AppTheme.primaryGreen,
+                    foregroundColor: const Color(0xFF1B5E20),
                   ),
                   child: const Text('View Trip Details'),
                 ),
@@ -376,39 +351,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Today\'s Summary',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            const Text('Summary', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(
-                  child: _buildStatItem(
-                    icon: Icons.route,
-                    label: 'Trips',
-                    value: '${rider.profile?.totalTrips ?? 0}',
-                  ),
-                ),
-                Expanded(
-                  child: _buildStatItem(
-                    icon: Icons.payments,
-                    label: 'Earnings',
-                    value:
-                        'K${rider.profile?.totalEarnings.toStringAsFixed(0) ?? "0"}',
-                  ),
-                ),
-                Expanded(
-                  child: _buildStatItem(
-                    icon: Icons.star,
-                    label: 'Rating',
-                    value:
-                        rider.profile?.rating.toStringAsFixed(1) ?? '0.0',
-                  ),
-                ),
+                Expanded(child: _statItem(Icons.route, 'Trips', '${rider.profile?.totalTrips ?? 0}')),
+                Expanded(child: _statItem(Icons.star, 'Rating', '${rider.profile?.avgRating.toStringAsFixed(1) ?? "0.0"}')),
               ],
             ),
           ],
@@ -417,29 +365,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildStatItem({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
+  Widget _statItem(IconData icon, String label, String value) {
     return Column(
       children: [
-        Icon(icon, color: AppTheme.primaryGreen, size: 28),
+        Icon(icon, color: const Color(0xFF1B5E20), size: 28),
         const SizedBox(height: 8),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            color: Colors.grey[600],
-          ),
-        ),
+        Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
       ],
     );
   }
@@ -453,50 +385,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               Icon(Icons.motorcycle, size: 48, color: Colors.grey[400]),
               const SizedBox(height: 12),
-              Text(
-                'Go online to start receiving trips',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
-                textAlign: TextAlign.center,
-              ),
+              Text('Go online to start receiving trips',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  textAlign: TextAlign.center),
             ],
           ),
         ),
       );
     }
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
             const SizedBox(
-              height: 48,
-              width: 48,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                color: AppTheme.primaryGreen,
-              ),
+              height: 48, width: 48,
+              child: CircularProgressIndicator(strokeWidth: 3, color: Color(0xFF1B5E20)),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Waiting for ride requests...',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            const Text('Waiting for ride requests...',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
             const SizedBox(height: 8),
-            Text(
-              'Stay in Mufulira or Chililabombwe area\nfor best chances',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey[600],
-              ),
-            ),
+            Text('Stay in Mufulira or Chililabombwe area\nfor best chances',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey[600])),
           ],
         ),
       ),

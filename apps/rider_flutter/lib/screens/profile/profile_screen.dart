@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import '../../services/rider_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/insurance_warning.dart';
@@ -11,7 +13,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final RiderService _riderService = RiderService();
   Map<String, dynamic>? _profile;
   Map<String, dynamic>? _insuranceWarning;
   bool _loading = true;
@@ -23,16 +24,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadProfile() async {
+    final riderService = context.read<RiderService>();
     try {
-      final profile = await _riderService.getProfile();
-      final warning = await _riderService.getInsuranceWarning();
-      setState(() {
-        _profile = profile;
-        _insuranceWarning = warning;
-        _loading = false;
-      });
+      final profile = await riderService.getProfile();
+      final warning = await riderService.getInsuranceWarning();
+      if (mounted) {
+        setState(() {
+          _profile = profile;
+          _insuranceWarning = warning;
+          _loading = false;
+        });
+      }
     } catch (e) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -139,7 +143,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       // Logout
                       OutlinedButton.icon(
                         onPressed: () async {
-                          await AuthService().logout();
+                          await context.read<AuthService>().logout();
                           if (mounted) {
                             Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
                           }
@@ -193,7 +197,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     switch (type) {
       case 'NRC': return 'National Registration Card';
       case 'SELFIE': return 'Selfie Photo';
-      case 'RIDER_LICENCE': return 'Rider Licence';
+      case 'RIDER_LICENCE': return "Rider's Licence";
       case 'INSURANCE_CERTIFICATE': return 'Insurance Certificate';
       default: return type ?? '';
     }

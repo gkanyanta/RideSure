@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../config/theme.dart';
-import '../../models/models.dart';
+import '../../models/models.dart' as models;
 import '../../services/trip_service.dart';
 import '../../services/socket_service.dart';
 import '../../widgets/rider_info_card.dart';
@@ -47,7 +48,13 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
           tripService.updateTripFromSocket(data);
         }
         if (mounted) {
-          Navigator.pushReplacementNamed(context, '/trip-complete');
+          final trip = tripService.currentTrip;
+          Navigator.pushReplacementNamed(context, '/trip-complete', arguments: trip != null ? {
+            'id': trip.id,
+            'actualFare': trip.actualFare,
+            'estimatedFareHigh': trip.estimatedFareHigh,
+            'rider': trip.rider?.toJson(),
+          } : <String, dynamic>{});
         }
       },
       onCancelled: (data) {
@@ -68,9 +75,8 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
       },
       onLocationUpdate: (data) {
         if (data is Map<String, dynamic>) {
-          final lat = (data['latitude'] ?? data['lat'])?.toDouble();
-          final lng =
-              (data['longitude'] ?? data['lng'] ?? data['lon'])?.toDouble();
+          final lat = (data['lat'] ?? data['latitude'])?.toDouble();
+          final lng = (data['lng'] ?? data['longitude'])?.toDouble();
           if (lat != null && lng != null) {
             setState(() {
               _riderLocation = LatLng(lat, lng);
@@ -88,87 +94,79 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
     super.dispose();
   }
 
-  String _statusLabel(TripStatus status) {
+  String _statusLabel(models.TripStatus status) {
     switch (status) {
-      case TripStatus.ACCEPTED:
+      case models.TripStatus.ACCEPTED:
         return 'Rider is on the way';
-      case TripStatus.ARRIVED:
+      case models.TripStatus.ARRIVED:
         return 'Rider has arrived';
-      case TripStatus.IN_PROGRESS:
+      case models.TripStatus.IN_PROGRESS:
         return 'Trip in progress';
-      case TripStatus.COMPLETED:
+      case models.TripStatus.COMPLETED:
         return 'Trip completed';
-      case TripStatus.CANCELLED:
+      case models.TripStatus.CANCELLED:
         return 'Trip cancelled';
       default:
         return 'Trip active';
     }
   }
 
-  Color _statusColor(TripStatus status) {
+  Color _statusColor(models.TripStatus status) {
     switch (status) {
-      case TripStatus.ACCEPTED:
+      case models.TripStatus.ACCEPTED:
         return AppTheme.primaryColor;
-      case TripStatus.ARRIVED:
+      case models.TripStatus.ARRIVED:
         return AppTheme.warningColor;
-      case TripStatus.IN_PROGRESS:
+      case models.TripStatus.IN_PROGRESS:
         return AppTheme.successColor;
-      case TripStatus.COMPLETED:
+      case models.TripStatus.COMPLETED:
         return AppTheme.successColor;
-      case TripStatus.CANCELLED:
+      case models.TripStatus.CANCELLED:
         return AppTheme.dangerColor;
       default:
         return AppTheme.primaryColor;
     }
   }
 
-  IconData _statusIcon(TripStatus status) {
+  IconData _statusIcon(models.TripStatus status) {
     switch (status) {
-      case TripStatus.ACCEPTED:
+      case models.TripStatus.ACCEPTED:
         return Icons.directions_bike;
-      case TripStatus.ARRIVED:
+      case models.TripStatus.ARRIVED:
         return Icons.place;
-      case TripStatus.IN_PROGRESS:
+      case models.TripStatus.IN_PROGRESS:
         return Icons.navigation;
-      case TripStatus.COMPLETED:
+      case models.TripStatus.COMPLETED:
         return Icons.check_circle;
-      case TripStatus.CANCELLED:
+      case models.TripStatus.CANCELLED:
         return Icons.cancel;
       default:
         return Icons.info;
     }
   }
 
-  Set<Marker> _buildMarkers(Trip trip) {
+  Set<Marker> _buildMarkers(models.Trip trip) {
     final markers = <Marker>{};
 
     markers.add(Marker(
       markerId: const MarkerId('pickup'),
-      position: LatLng(
-        trip.pickup.coordinates.latitude,
-        trip.pickup.coordinates.longitude,
-      ),
+      position: LatLng(trip.pickupLat, trip.pickupLng),
       icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-      infoWindow: InfoWindow(title: trip.pickup.address ?? 'Pickup'),
+      infoWindow: InfoWindow(title: trip.pickupAddress),
     ));
 
     markers.add(Marker(
       markerId: const MarkerId('destination'),
-      position: LatLng(
-        trip.destination.coordinates.latitude,
-        trip.destination.coordinates.longitude,
-      ),
+      position: LatLng(trip.destinationLat, trip.destinationLng),
       icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-      infoWindow:
-          InfoWindow(title: trip.destination.address ?? 'Destination'),
+      infoWindow: InfoWindow(title: trip.destinationAddress),
     ));
 
     if (_riderLocation != null) {
       markers.add(Marker(
         markerId: const MarkerId('rider'),
         position: _riderLocation!,
-        icon:
-            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
         infoWindow: const InfoWindow(title: 'Rider'),
       ));
     }
@@ -213,10 +211,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                     children: [
                       GoogleMap(
                         initialCameraPosition: CameraPosition(
-                          target: LatLng(
-                            trip.pickup.coordinates.latitude,
-                            trip.pickup.coordinates.longitude,
-                          ),
+                          target: LatLng(trip.pickupLat, trip.pickupLng),
                           zoom: 14.0,
                         ),
                         markers: _buildMarkers(trip),
@@ -329,24 +324,23 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                             Icons.circle,
                             AppTheme.successColor,
                             'Pickup',
-                            trip.pickup.address ?? 'Pickup location',
+                            trip.pickupAddress,
                           ),
                           const SizedBox(height: 12),
                           _buildTripDetail(
                             Icons.circle,
                             AppTheme.dangerColor,
                             'Destination',
-                            trip.destination.address ?? 'Destination',
+                            trip.destinationAddress,
                           ),
 
-                          if (trip.type == TripType.DELIVERY &&
-                              trip.deliveryDetails != null) ...[
+                          if (trip.isDelivery && trip.packageType != null) ...[
                             const SizedBox(height: 12),
                             _buildTripDetail(
                               Icons.inventory_2_outlined,
                               AppTheme.warningColor,
                               'Package',
-                              trip.deliveryDetails!.packageType,
+                              trip.packageType!,
                             ),
                           ],
 
@@ -356,7 +350,10 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                           if (trip.shareCode != null) ...[
                             OutlinedButton.icon(
                               onPressed: () {
-                                Navigator.pushNamed(context, '/share-trip');
+                                Share.share(
+                                  'Track my RideSure trip: ${trip.shareCode}',
+                                  subject: 'RideSure Trip',
+                                );
                               },
                               icon: const Icon(Icons.share),
                               label: const Text('Share Trip'),
@@ -365,7 +362,7 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
                           ],
 
                           // Cancel (only if ACCEPTED)
-                          if (trip.status == TripStatus.ACCEPTED)
+                          if (trip.status == models.TripStatus.ACCEPTED)
                             TextButton(
                               onPressed: () => _cancelTrip(trip.id),
                               style: TextButton.styleFrom(
@@ -420,19 +417,18 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
     );
   }
 
-  Widget _buildStatusProgress(TripStatus current) {
+  Widget _buildStatusProgress(models.TripStatus current) {
     final statuses = [
-      TripStatus.ACCEPTED,
-      TripStatus.ARRIVED,
-      TripStatus.IN_PROGRESS,
-      TripStatus.COMPLETED,
+      models.TripStatus.ACCEPTED,
+      models.TripStatus.ARRIVED,
+      models.TripStatus.IN_PROGRESS,
+      models.TripStatus.COMPLETED,
     ];
     final currentIndex = statuses.indexOf(current);
 
     return Row(
       children: List.generate(statuses.length * 2 - 1, (index) {
         if (index.isOdd) {
-          // Connector line
           final stepIndex = index ~/ 2;
           return Expanded(
             child: Container(
@@ -444,7 +440,6 @@ class _ActiveTripScreenState extends State<ActiveTripScreen> {
           );
         }
 
-        // Status dot
         final stepIndex = index ~/ 2;
         final isActive = stepIndex <= currentIndex;
         final isCurrent = stepIndex == currentIndex;

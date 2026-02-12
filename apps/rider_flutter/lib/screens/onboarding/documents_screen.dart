@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../config/theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/rider_service.dart';
 
@@ -81,10 +80,10 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         case 'SELFIE':
           _selfieFile = File(picked.path);
           break;
-        case 'DRIVERS_LICENCE':
+        case 'RIDER_LICENCE':
           _licenceFile = File(picked.path);
           break;
-        case 'INSURANCE':
+        case 'INSURANCE_CERTIFICATE':
           _insuranceFile = File(picked.path);
           break;
       }
@@ -100,10 +99,10 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       case 'SELFIE':
         file = _selfieFile;
         break;
-      case 'DRIVERS_LICENCE':
+      case 'RIDER_LICENCE':
         file = _licenceFile;
         break;
-      case 'INSURANCE':
+      case 'INSURANCE_CERTIFICATE':
         file = _insuranceFile;
         break;
     }
@@ -116,7 +115,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     }
 
     // Validate insurance fields
-    if (docType == 'INSURANCE') {
+    if (docType == 'INSURANCE_CERTIFICATE') {
       if (_insurerNameController.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Enter the insurer name')),
@@ -144,10 +143,10 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       type: docType,
       file: file,
       insurerName:
-          docType == 'INSURANCE' ? _insurerNameController.text.trim() : null,
+          docType == 'INSURANCE_CERTIFICATE' ? _insurerNameController.text.trim() : null,
       policyNumber:
-          docType == 'INSURANCE' ? _policyNumberController.text.trim() : null,
-      expiryDate: docType == 'INSURANCE' && _insuranceExpiry != null
+          docType == 'INSURANCE_CERTIFICATE' ? _policyNumberController.text.trim() : null,
+      expiryDate: docType == 'INSURANCE_CERTIFICATE' && _insuranceExpiry != null
           ? _insuranceExpiry!.toIso8601String()
           : null,
     );
@@ -161,7 +160,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(rider.error!),
-          backgroundColor: AppTheme.dangerRed,
+          backgroundColor: const Color(0xFFD32F2F),
         ),
       );
     }
@@ -241,7 +240,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               title: "Driver's Licence",
               subtitle: 'Valid motorcycle driving licence',
               icon: Icons.card_membership,
-              docType: 'DRIVERS_LICENCE',
+              docType: 'RIDER_LICENCE',
               file: _licenceFile,
             ),
             const SizedBox(height: 12),
@@ -302,7 +301,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           children: [
             Row(
               children: [
-                Icon(icon, color: AppTheme.primaryGreen, size: 28),
+                Icon(icon, color: const Color(0xFF1B5E20), size: 28),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -326,7 +325,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   ),
                 ),
                 if (isUploaded)
-                  const Icon(Icons.check_circle, color: AppTheme.accentGreen),
+                  const Icon(Icons.check_circle, color: const Color(0xFF4CAF50)),
               ],
             ),
             if (!isUploaded) ...[
@@ -382,8 +381,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   }
 
   Widget _buildInsuranceCard() {
-    final isUploaded = _isDocUploaded('INSURANCE');
-    final isUploading = _uploading['INSURANCE'] == true;
+    final isUploaded = _isDocUploaded('INSURANCE_CERTIFICATE');
+    final isUploading = _uploading['INSURANCE_CERTIFICATE'] == true;
 
     return Card(
       child: Padding(
@@ -393,7 +392,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.security, color: AppTheme.primaryGreen, size: 28),
+                const Icon(Icons.security, color: const Color(0xFF1B5E20), size: 28),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -417,7 +416,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   ),
                 ),
                 if (isUploaded)
-                  const Icon(Icons.check_circle, color: AppTheme.accentGreen),
+                  const Icon(Icons.check_circle, color: const Color(0xFF4CAF50)),
               ],
             ),
             if (!isUploaded) ...[
@@ -486,7 +485,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _pickImage('INSURANCE'),
+                      onPressed: () => _pickImage('INSURANCE_CERTIFICATE'),
                       icon: const Icon(Icons.camera_alt, size: 18),
                       label: Text(_insuranceFile == null
                           ? 'Select Image'
@@ -499,7 +498,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                       child: ElevatedButton(
                         onPressed: isUploading
                             ? null
-                            : () => _uploadDocument('INSURANCE'),
+                            : () => _uploadDocument('INSURANCE_CERTIFICATE'),
                         child: isUploading
                             ? const SizedBox(
                                 height: 20,

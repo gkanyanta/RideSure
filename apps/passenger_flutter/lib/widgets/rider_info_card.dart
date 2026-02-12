@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
+import '../models/models.dart';
 
 class RiderInfoCard extends StatelessWidget {
-  final Map<String, dynamic> rider;
+  final Rider rider;
   const RiderInfoCard({super.key, required this.rider});
 
   @override
   Widget build(BuildContext context) {
-    final name = rider['name'] ?? 'Rider';
-    final rating = (rider['rating'] ?? 0.0) as num;
-    final totalTrips = rider['totalTrips'] ?? 0;
-    final vehicle = rider['vehicle'];
-    final insurance = rider['insurance'];
+    final name = rider.displayName;
+    final rating = rider.avgRating;
+    final totalTrips = rider.totalTrips;
+    final vehicle = rider.vehicle;
 
     return Card(
       elevation: 3,
@@ -36,7 +36,7 @@ class RiderInfoCard extends StatelessWidget {
                         children: [
                           Icon(Icons.star, size: 16, color: Colors.amber[700]),
                           const SizedBox(width: 2),
-                          Text('${rating.toStringAsFixed(1)}', style: const TextStyle(fontSize: 14)),
+                          Text(rating.toStringAsFixed(1), style: const TextStyle(fontSize: 14)),
                           const SizedBox(width: 8),
                           Text('$totalTrips trips', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
                         ],
@@ -57,7 +57,7 @@ class RiderInfoCard extends StatelessWidget {
                     children: [
                       Icon(Icons.verified, size: 14, color: Colors.green),
                       SizedBox(width: 4),
-                      Text('Insured & Verified',
+                      Text('Verified',
                           style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
                     ],
                   ),
@@ -70,24 +70,11 @@ class RiderInfoCard extends StatelessWidget {
                 children: [
                   const Icon(Icons.two_wheeler, size: 20, color: Color(0xFF1565C0)),
                   const SizedBox(width: 8),
-                  Text('${vehicle['model'] ?? ''} • ${vehicle['plateNumber'] ?? ''}'),
-                  if (vehicle['color'] != null) ...[
+                  Text('${vehicle.model ?? ''} • ${vehicle.plateNumber ?? ''}'),
+                  if (vehicle.color != null) ...[
                     const SizedBox(width: 4),
-                    Text('(${vehicle['color']})', style: TextStyle(color: Colors.grey[600])),
+                    Text('(${vehicle.color})', style: TextStyle(color: Colors.grey[600])),
                   ],
-                ],
-              ),
-            ],
-            if (insurance != null && insurance['expiryDate'] != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.shield, size: 16, color: Colors.green),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Insured by ${insurance['insurerName'] ?? 'N/A'}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
                 ],
               ),
             ],

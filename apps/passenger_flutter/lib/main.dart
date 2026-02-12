@@ -14,7 +14,6 @@ import 'screens/booking/delivery_details_screen.dart';
 import 'screens/trip/searching_screen.dart';
 import 'screens/trip/active_trip_screen.dart';
 import 'screens/trip/trip_complete_screen.dart';
-import 'screens/trip/share_trip_screen.dart';
 import 'screens/history/trip_history_screen.dart';
 
 void main() {
@@ -47,8 +46,11 @@ class RideSurePassengerApp extends StatelessWidget {
           '/delivery-details': (context) => const DeliveryDetailsScreen(),
           '/searching': (context) => const SearchingScreen(),
           '/active-trip': (context) => const ActiveTripScreen(),
-          '/trip-complete': (context) => const TripCompleteScreen(),
-          '/share-trip': (context) => const ShareTripScreen(),
+          '/trip-complete': (context) {
+            final args = ModalRoute.of(context)?.settings.arguments;
+            final trip = args is Map<String, dynamic> ? args : <String, dynamic>{};
+            return TripCompleteScreen(trip: trip);
+          },
           '/trip-history': (context) => const TripHistoryScreen(),
         },
       ),

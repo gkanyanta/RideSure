@@ -95,11 +95,14 @@ class SocketService extends ChangeNotifier {
       onTripCancelled?.call(tripId);
     });
 
-    // Listen for offer expired
-    _socket!.on('trip:offer_expired', (data) {
-      print('Trip offer expired');
+    // Listen for trip confirmed (after rider accepts)
+    _socket!.on('trip:confirmed', (data) {
       _currentOffer = null;
       notifyListeners();
+      if (data is Map && data['trip'] != null) {
+        final trip = Trip.fromJson(data['trip']);
+        onTripUpdate?.call(trip);
+      }
     });
 
     _socket!.connect();
@@ -131,9 +134,9 @@ class SocketService extends ChangeNotifier {
 
   /// Send location update via socket.
   void sendLocation(double lat, double lng) {
-    _socket?.emit('location:update', {
-      'latitude': lat,
-      'longitude': lng,
+    _socket?.emit('rider:location', {
+      'lat': lat,
+      'lng': lng,
     });
   }
 

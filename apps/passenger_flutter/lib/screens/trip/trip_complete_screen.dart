@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../services/trip_service.dart';
 
 class TripCompleteScreen extends StatefulWidget {
@@ -10,16 +11,48 @@ class TripCompleteScreen extends StatefulWidget {
 }
 
 class _TripCompleteScreenState extends State<TripCompleteScreen> {
-  final TripService _tripService = TripService();
   int _rating = 0;
   final _commentController = TextEditingController();
   bool _submitting = false;
   bool _submitted = false;
+  late Map<String, dynamic> _tripData;
+
+  @override
+  void initState() {
+    super.initState();
+    _tripData = widget.trip;
+    // If trip data wasn't passed via arguments, get it from TripService
+    if (_tripData.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final tripService = context.read<TripService>();
+        if (tripService.currentTrip != null) {
+          final trip = tripService.currentTrip!;
+          setState(() {
+            _tripData = {
+              'id': trip.id,
+              'actualFare': trip.actualFare,
+              'estimatedFareHigh': trip.estimatedFareHigh,
+              'rider': trip.rider != null ? {
+                'user': {'name': trip.rider!.displayName},
+              } : null,
+            };
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final fare = widget.trip['actualFare'] ?? widget.trip['estimatedFareHigh'] ?? 0;
-    final riderName = widget.trip['rider']?['user']?['name'] ?? 'Your rider';
+    final fare = _tripData['actualFare'] ?? _tripData['estimatedFareHigh'] ?? 0;
+    final riderName = _tripData['rider']?['user']?['name'] ??
+        _tripData['rider']?['name'] ?? 'Your rider';
 
     return Scaffold(
       appBar: AppBar(
@@ -89,7 +122,11 @@ class _TripCompleteScreenState extends State<TripCompleteScreen> {
 
             const SizedBox(height: 24),
             TextButton(
-              onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+              onPressed: () {
+                final tripService = context.read<TripService>();
+                tripService.clearCurrentTrip();
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              },
               child: const Text('Back to Home'),
             ),
           ],
@@ -99,15 +136,27 @@ class _TripCompleteScreenState extends State<TripCompleteScreen> {
   }
 
   Future<void> _submitRating() async {
+    final tripId = _tripData['id'];
+    if (tripId == null) return;
+
     setState(() => _submitting = true);
     try {
-      await _tripService.rateTrip(widget.trip['id'], _rating, _commentController.text);
-      setState(() => _submitted = true);
+      final tripService = context.read<TripService>();
+      final success = await tripService.rateTrip(
+        tripId,
+        _rating,
+        comment: _commentController.text.trim().isNotEmpty
+            ? _commentController.text.trim()
+            : null,
+      );
+      if (success) {
+        setState(() => _submitted = true);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
-    setState(() => _submitting = false);
+    if (mounted) setState(() => _submitting = false);
   }
 }

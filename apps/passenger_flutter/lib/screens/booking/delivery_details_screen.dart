@@ -62,21 +62,15 @@ class _DeliveryDetailsScreenState extends State<DeliveryDetailsScreen> {
 
     final tripService = context.read<TripService>();
     final trip = await tripService.requestTrip(
-      pickup: TripLocation(
-        coordinates: pickup,
-        address: pickupAddress,
-      ),
-      destination: TripLocation(
-        coordinates: destination,
-        address: destinationAddress,
-      ),
+      pickup: pickup,
+      destination: destination,
+      pickupAddress: pickupAddress ?? '',
+      destinationAddress: destinationAddress ?? '',
       type: TripType.DELIVERY,
-      deliveryDetails: DeliveryDetails(
-        packageType: _selectedPackageType,
-        notes: _notesController.text.trim().isNotEmpty
-            ? _notesController.text.trim()
-            : null,
-      ),
+      packageType: _selectedPackageType,
+      packageNotes: _notesController.text.trim().isNotEmpty
+          ? _notesController.text.trim()
+          : null,
     );
 
     if (trip != null && mounted) {
