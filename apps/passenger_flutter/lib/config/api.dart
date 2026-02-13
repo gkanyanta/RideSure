@@ -1,10 +1,23 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiConfig {
-  static const String baseUrl = 'http://10.0.2.2:3000/api';
-  static const String socketUrl = 'http://10.0.2.2:3000/ws';
-  static const String shareBaseUrl = 'http://10.0.2.2:3000/api/trips/share';
+  // Toggle this to switch between local dev and Render deployment
+  static const bool useProduction = false;
+
+  static const String _renderHost = 'ridesure-api.onrender.com';
+  static const String _localHost = kIsWeb ? 'localhost' : '10.0.2.2';
+
+  static String get baseUrl => useProduction
+      ? 'https://$_renderHost/api'
+      : 'http://$_localHost:3000/api';
+  static String get socketUrl => useProduction
+      ? 'https://$_renderHost/ws'
+      : 'http://$_localHost:3000/ws';
+  static String get shareBaseUrl => useProduction
+      ? 'https://$_renderHost/api/trips/share'
+      : 'http://$_localHost:3000/api/trips/share';
 
   static Dio? _dio;
 

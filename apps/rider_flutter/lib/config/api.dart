@@ -2,9 +2,18 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiConfig {
-  // Android emulator localhost
-  static const String baseUrl = 'http://10.0.2.2:3000/api';
-  static const String socketUrl = 'http://10.0.2.2:3000/ws';
+  // Toggle this to switch between local dev and Render deployment
+  static const bool useProduction = false;
+
+  static const String _renderHost = 'ridesure-api.onrender.com';
+  static const String _localHost = '10.0.2.2';
+
+  static String get baseUrl => useProduction
+      ? 'https://$_renderHost/api'
+      : 'http://$_localHost:3000/api';
+  static String get socketUrl => useProduction
+      ? 'https://$_renderHost/ws'
+      : 'http://$_localHost:3000/ws';
 
   static Dio createDio() {
     final dio = Dio(BaseOptions(

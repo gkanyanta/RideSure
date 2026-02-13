@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   IsString,
   IsNotEmpty,
-  IsEnum,
+  IsIn,
   IsOptional,
   Matches,
 } from 'class-validator';
@@ -27,7 +27,7 @@ export class VerifyOtpDto {
   code: string;
 
   @ApiProperty({ enum: ['PASSENGER', 'RIDER'], example: 'PASSENGER' })
-  @IsEnum(['PASSENGER', 'RIDER'])
+  @IsIn(['PASSENGER', 'RIDER'])
   role: 'PASSENGER' | 'RIDER';
 
   @ApiProperty({ required: false, example: 'John Banda' })

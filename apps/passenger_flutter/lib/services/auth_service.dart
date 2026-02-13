@@ -75,6 +75,7 @@ class AuthService extends ChangeNotifier {
       final response = await ApiConfig.dio.post('/auth/otp/verify', data: {
         'phone': phone,
         'code': code,
+        'role': 'PASSENGER',
       });
 
       if (response.statusCode == 200 || response.statusCode == 201) {
