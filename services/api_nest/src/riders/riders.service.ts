@@ -6,7 +6,6 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { StorageService } from '../storage/storage.service';
 import { DocumentType, RiderStatus } from '@prisma/client';
 
 @Injectable()
@@ -15,7 +14,6 @@ export class RidersService {
 
   constructor(
     private prisma: PrismaService,
-    private storage: StorageService,
   ) {}
 
   async getProfile(riderId: string) {
@@ -51,15 +49,13 @@ export class RidersService {
     file: Express.Multer.File,
     insuranceData?: { insurerName: string; policyNumber: string; expiryDate: string },
   ) {
-    const folder = `riders/${riderId}`;
-    const filePath = await this.storage.save(file, folder);
-
     const data: any = {
       riderId,
       type,
-      filePath,
+      filePath: `db://${riderId}/${type}`,
       originalName: file.originalname,
       mimeType: file.mimetype,
+      fileData: file.buffer,
       status: 'PENDING',
     };
 
@@ -78,7 +74,9 @@ export class RidersService {
     // Check if all required docs are uploaded
     await this.checkAndUpdateStatus(riderId);
 
-    return doc;
+    // Return without fileData (don't send raw bytes back)
+    const { fileData, ...result } = doc;
+    return result;
   }
 
   private async checkAndUpdateStatus(riderId: string) {
@@ -87,7 +85,8 @@ export class RidersService {
     });
 
     const requiredTypes: DocumentType[] = [
-      'NRC', 'SELFIE', 'RIDER_LICENCE', 'INSURANCE_CERTIFICATE',
+      'SELFIE', 'RIDER_LICENCE', 'INSURANCE_CERTIFICATE',
+      'BIKE_FRONT', 'BIKE_BACK', 'BIKE_LEFT', 'BIKE_RIGHT',
     ];
     const uploadedTypes = docs.map(d => d.type);
     const allUploaded = requiredTypes.every(t => uploadedTypes.includes(t));
@@ -182,7 +181,10 @@ export class RidersService {
 
     if (action === 'APPROVED') {
       // Verify all docs exist
-      const requiredTypes: DocumentType[] = ['NRC', 'SELFIE', 'RIDER_LICENCE', 'INSURANCE_CERTIFICATE'];
+      const requiredTypes: DocumentType[] = [
+        'SELFIE', 'RIDER_LICENCE', 'INSURANCE_CERTIFICATE',
+        'BIKE_FRONT', 'BIKE_BACK', 'BIKE_LEFT', 'BIKE_RIGHT',
+      ];
       const uploadedTypes = rider.documents.map(d => d.type);
       const missing = requiredTypes.filter(t => !uploadedTypes.includes(t));
       if (missing.length > 0) {

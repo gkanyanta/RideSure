@@ -93,7 +93,7 @@ class RiderService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Upload a document (NRC, SELFIE, RIDER_LICENCE, INSURANCE_CERTIFICATE).
+  /// Upload a document (SELFIE, RIDER_LICENCE, INSURANCE_CERTIFICATE, BIKE_*).
   Future<bool> uploadDocument({
     required String type,
     required File file,

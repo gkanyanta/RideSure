@@ -17,7 +17,6 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiConsumes, ApiBody } from '@nes
 import { Response } from 'express';
 import { DocumentType, RiderStatus } from '@prisma/client';
 import { RidersService } from './riders.service';
-import { StorageService } from '../storage/storage.service';
 import {
   CreateVehicleDto,
   UpdateLocationDto,
@@ -28,7 +27,7 @@ import {
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import * as fs from 'fs';
+import { PrismaService } from '../prisma.service';
 
 @ApiTags('riders')
 @ApiBearerAuth()
@@ -36,7 +35,7 @@ import * as fs from 'fs';
 export class RidersController {
   constructor(
     private ridersService: RidersService,
-    private storage: StorageService,
+    private prisma: PrismaService,
   ) {}
 
   @Get('profile')
@@ -59,7 +58,7 @@ export class RidersController {
   @UseGuards(RolesGuard)
   @Roles('RIDER')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
-  @ApiOperation({ summary: 'Upload a document (NRC, SELFIE, RIDER_LICENCE, INSURANCE_CERTIFICATE)' })
+  @ApiOperation({ summary: 'Upload a document (SELFIE, RIDER_LICENCE, INSURANCE_CERTIFICATE, BIKE_FRONT, BIKE_BACK, BIKE_LEFT, BIKE_RIGHT)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -80,7 +79,10 @@ export class RidersController {
   ) {
     if (!file) throw new Error('File is required');
 
-    const validTypes: DocumentType[] = ['NRC', 'SELFIE', 'RIDER_LICENCE', 'INSURANCE_CERTIFICATE'];
+    const validTypes: DocumentType[] = [
+      'SELFIE', 'RIDER_LICENCE', 'INSURANCE_CERTIFICATE',
+      'BIKE_FRONT', 'BIKE_BACK', 'BIKE_LEFT', 'BIKE_RIGHT',
+    ];
     if (!validTypes.includes(type)) throw new Error(`Invalid document type. Must be one of: ${validTypes.join(', ')}`);
 
     let insuranceData;
@@ -98,17 +100,15 @@ export class RidersController {
   @Get('documents/:docId/file')
   @ApiOperation({ summary: 'Download a document file (auth required)' })
   async getDocumentFile(@Param('docId') docId: string, @Res() res: Response) {
-    const doc = await this.ridersService['prisma'].riderDocument.findUnique({
+    const doc = await this.prisma.riderDocument.findUnique({
       where: { id: docId },
     });
     if (!doc) return res.status(404).json({ message: 'Document not found' });
-
-    const filePath = this.storage.getPath(doc.filePath);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'File not found' });
+    if (!doc.fileData) return res.status(404).json({ message: 'File not found' });
 
     res.setHeader('Content-Type', doc.mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${doc.originalName}"`);
-    fs.createReadStream(filePath).pipe(res);
+    res.send(doc.fileData);
   }
 
   @Put('location')

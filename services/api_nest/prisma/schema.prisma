@@ -24,10 +24,13 @@ enum RiderStatus {
 }
 
 enum DocumentType {
-  NRC
   SELFIE
   RIDER_LICENCE
   INSURANCE_CERTIFICATE
+  BIKE_FRONT
+  BIKE_BACK
+  BIKE_LEFT
+  BIKE_RIGHT
 }
 
 enum DocumentStatus {
@@ -111,6 +114,7 @@ model RiderDocument {
   filePath       String
   originalName   String
   mimeType       String
+  fileData       Bytes?
   // Insurance-specific fields
   insurerName    String?
   policyNumber   String?

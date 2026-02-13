@@ -195,10 +195,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _docTypeLabel(String? type) {
     switch (type) {
-      case 'NRC': return 'National Registration Card';
       case 'SELFIE': return 'Selfie Photo';
       case 'RIDER_LICENCE': return "Rider's Licence";
       case 'INSURANCE_CERTIFICATE': return 'Insurance Certificate';
+      case 'BIKE_FRONT': return 'Bike Photo (Front)';
+      case 'BIKE_BACK': return 'Bike Photo (Back)';
+      case 'BIKE_LEFT': return 'Bike Photo (Left)';
+      case 'BIKE_RIGHT': return 'Bike Photo (Right)';
       default: return type ?? '';
     }
   }
