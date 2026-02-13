@@ -24,6 +24,7 @@ const colorMap: Record<string, string> = {
 };
 
 export default function StatusBadge({ status, size = 'sm' }: StatusBadgeProps) {
+  if (!status) return null;
   const colors = colorMap[status] || 'bg-gray-100 text-gray-800';
   const sizeClass = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm';
 

@@ -80,7 +80,7 @@ export default function RidersPage() {
                   <tr key={rider.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 font-medium">{rider.user?.name || 'Unnamed'}</td>
                     <td className="px-6 py-4 text-gray-600">{rider.user?.phone}</td>
-                    <td className="px-6 py-4"><StatusBadge status={rider.status} /></td>
+                    <td className="px-6 py-4">{rider.status && <StatusBadge status={rider.status} />}</td>
                     <td className="px-6 py-4 text-gray-600">{rider.vehicle?.model || '-'}</td>
                     <td className="px-6 py-4">
                       <span className={isExpired ? 'text-red-600 font-medium' : ''}>
