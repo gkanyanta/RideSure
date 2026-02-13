@@ -46,5 +46,7 @@ services:
         value: production
       - key: NEXT_PUBLIC_API_URL
         value: https://ridesure-api.onrender.com/api
+      - key: HOSTNAME
+        value: "0.0.0.0"
       - key: PORT
-        value: "3000"
+        value: "10000"
