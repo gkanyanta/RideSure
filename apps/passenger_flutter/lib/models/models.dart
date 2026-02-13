@@ -382,6 +382,52 @@ class Trip {
   }
 }
 
+class PlaceResult {
+  final String placeId;
+  final String description;
+  final String mainText;
+  final String secondaryText;
+  final double? latitude;
+  final double? longitude;
+
+  PlaceResult({
+    required this.placeId,
+    required this.description,
+    required this.mainText,
+    required this.secondaryText,
+    this.latitude,
+    this.longitude,
+  });
+
+  factory PlaceResult.fromAutocomplete(Map<String, dynamic> json) {
+    final structured = json['structured_formatting'] ?? {};
+    return PlaceResult(
+      placeId: json['place_id'] ?? '',
+      description: json['description'] ?? '',
+      mainText: structured['main_text'] ?? json['description'] ?? '',
+      secondaryText: structured['secondary_text'] ?? '',
+    );
+  }
+
+  PlaceResult withCoordinates(double lat, double lng) {
+    return PlaceResult(
+      placeId: placeId,
+      description: description,
+      mainText: mainText,
+      secondaryText: secondaryText,
+      latitude: lat,
+      longitude: lng,
+    );
+  }
+
+  LatLng? toLatLng() {
+    if (latitude != null && longitude != null) {
+      return LatLng(latitude: latitude!, longitude: longitude!);
+    }
+    return null;
+  }
+}
+
 class DeliveryDetails {
   final String packageType;
   final String? notes;

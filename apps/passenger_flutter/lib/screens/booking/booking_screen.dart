@@ -32,17 +32,24 @@ class _BookingScreenState extends State<BookingScreen> {
       _destination = args['destination'] as LatLng?;
       _tripType = args['type'] as TripType? ?? TripType.RIDE;
 
-      if (_pickup != null) {
-        _pickupController.text =
-            '${_pickup!.latitude.toStringAsFixed(4)}, ${_pickup!.longitude.toStringAsFixed(4)}';
-      }
-      if (_destination != null) {
-        _destinationController.text =
-            '${_destination!.latitude.toStringAsFixed(4)}, ${_destination!.longitude.toStringAsFixed(4)}';
-      }
+      // Use human-readable addresses if provided, fall back to coords
+      final pickupAddr = args['pickupAddress'] as String?;
+      final destAddr = args['destinationAddress'] as String?;
 
-      // Auto-fetch estimate
-      if (_pickup != null && _destination != null) {
+      _pickupController.text = pickupAddr ??
+          (_pickup != null
+              ? '${_pickup!.latitude.toStringAsFixed(4)}, ${_pickup!.longitude.toStringAsFixed(4)}'
+              : '');
+      _destinationController.text = destAddr ??
+          (_destination != null
+              ? '${_destination!.latitude.toStringAsFixed(4)}, ${_destination!.longitude.toStringAsFixed(4)}'
+              : '');
+
+      // Use pre-computed fare estimate if provided
+      final preEstimate = args['fareEstimate'] as FareEstimate?;
+      if (preEstimate != null) {
+        _fareEstimate = preEstimate;
+      } else if (_pickup != null && _destination != null) {
         _fetchEstimate();
       }
     }
@@ -318,6 +325,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   children: [
                     TextField(
                       controller: _pickupController,
+                      readOnly: true,
                       decoration: const InputDecoration(
                         hintText: 'Pickup location',
                         border: InputBorder.none,
@@ -329,6 +337,7 @@ class _BookingScreenState extends State<BookingScreen> {
                     const Divider(height: 1),
                     TextField(
                       controller: _destinationController,
+                      readOnly: true,
                       decoration: const InputDecoration(
                         hintText: 'Destination',
                         border: InputBorder.none,

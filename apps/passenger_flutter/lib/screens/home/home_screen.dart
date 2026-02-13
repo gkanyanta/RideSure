@@ -19,7 +19,12 @@ class _HomeScreenState extends State<HomeScreen> {
   GoogleMapController? _mapController;
   LatLng? _pickupLatLng;
   LatLng? _destinationLatLng;
+  String? _pickupAddress;
+  String? _destinationAddress;
   final Set<Marker> _markers = {};
+
+  models.FareEstimate? _fareEstimate;
+  bool _estimateLoading = false;
 
   // Mufulira center
   static const LatLng _defaultCenter = LatLng(-12.5432, 28.2311);
@@ -82,32 +87,102 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _onMapTap(LatLng position) {
-    setState(() {
-      if (_pickupLatLng == null) {
-        _pickupLatLng = position;
-        _markers.add(Marker(
-          markerId: const MarkerId('pickup'),
-          position: position,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          infoWindow: const InfoWindow(title: 'Pickup'),
-        ));
-      } else if (_destinationLatLng == null) {
-        _destinationLatLng = position;
-        _markers.add(Marker(
-          markerId: const MarkerId('destination'),
-          position: position,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: const InfoWindow(title: 'Destination'),
-        ));
-      }
-    });
+  void _openLocationSearch() async {
+    final result = await Navigator.pushNamed(context, '/location-search');
+    if (result is Map<String, dynamic> && mounted) {
+      _handleLocationSelected(result);
+    }
   }
 
-  void _clearMarkers() {
+  void _handleLocationSelected(Map<String, dynamic> result) {
+    final pickupLL = result['pickupLatLng'] as models.LatLng?;
+    final destLL = result['destinationLatLng'] as models.LatLng?;
+
+    if (pickupLL == null || destLL == null) return;
+
+    setState(() {
+      _pickupLatLng = LatLng(pickupLL.latitude, pickupLL.longitude);
+      _destinationLatLng = LatLng(destLL.latitude, destLL.longitude);
+      _pickupAddress = result['pickupAddress'] as String?;
+      _destinationAddress = result['destinationAddress'] as String?;
+
+      _markers.clear();
+      _markers.add(Marker(
+        markerId: const MarkerId('pickup'),
+        position: _pickupLatLng!,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        infoWindow: InfoWindow(title: 'Pickup', snippet: _pickupAddress),
+      ));
+      _markers.add(Marker(
+        markerId: const MarkerId('destination'),
+        position: _destinationLatLng!,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        infoWindow:
+            InfoWindow(title: 'Destination', snippet: _destinationAddress),
+      ));
+    });
+
+    // Fit camera to show both markers
+    if (_mapController != null) {
+      final bounds = LatLngBounds(
+        southwest: LatLng(
+          _pickupLatLng!.latitude < _destinationLatLng!.latitude
+              ? _pickupLatLng!.latitude
+              : _destinationLatLng!.latitude,
+          _pickupLatLng!.longitude < _destinationLatLng!.longitude
+              ? _pickupLatLng!.longitude
+              : _destinationLatLng!.longitude,
+        ),
+        northeast: LatLng(
+          _pickupLatLng!.latitude > _destinationLatLng!.latitude
+              ? _pickupLatLng!.latitude
+              : _destinationLatLng!.latitude,
+          _pickupLatLng!.longitude > _destinationLatLng!.longitude
+              ? _pickupLatLng!.longitude
+              : _destinationLatLng!.longitude,
+        ),
+      );
+      _mapController!
+          .animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
+    }
+
+    // Fetch fare estimate
+    _fetchFareEstimate();
+  }
+
+  Future<void> _fetchFareEstimate() async {
+    if (_pickupLatLng == null || _destinationLatLng == null) return;
+
+    setState(() => _estimateLoading = true);
+
+    final tripService = context.read<TripService>();
+    final estimate = await tripService.getFareEstimate(
+      pickup: models.LatLng(
+        latitude: _pickupLatLng!.latitude,
+        longitude: _pickupLatLng!.longitude,
+      ),
+      destination: models.LatLng(
+        latitude: _destinationLatLng!.latitude,
+        longitude: _destinationLatLng!.longitude,
+      ),
+      type: models.TripType.RIDE,
+    );
+
+    if (mounted) {
+      setState(() {
+        _fareEstimate = estimate;
+        _estimateLoading = false;
+      });
+    }
+  }
+
+  void _clearLocations() {
     setState(() {
       _pickupLatLng = null;
       _destinationLatLng = null;
+      _pickupAddress = null;
+      _destinationAddress = null;
+      _fareEstimate = null;
       _markers.clear();
     });
   }
@@ -116,8 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_pickupLatLng == null || _destinationLatLng == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('Tap the map to set pickup and destination points first'),
+          content: Text('Please set pickup and destination first'),
           backgroundColor: AppTheme.warningColor,
         ),
       );
@@ -137,12 +211,18 @@ class _HomeScreenState extends State<HomeScreen> {
           longitude: _destinationLatLng!.longitude,
         ),
         'type': type,
+        'pickupAddress': _pickupAddress,
+        'destinationAddress': _destinationAddress,
+        'fareEstimate': _fareEstimate,
       },
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasLocations =
+        _pickupLatLng != null && _destinationLatLng != null;
+
     return Scaffold(
       drawer: _buildDrawer(),
       body: Stack(
@@ -159,7 +239,6 @@ class _HomeScreenState extends State<HomeScreen> {
             mapToolbarEnabled: false,
             markers: _markers,
             onMapCreated: (controller) => _mapController = controller,
-            onTap: _onMapTap,
           ),
 
           // Top Bar
@@ -196,9 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Search bar
                     Expanded(
                       child: GestureDetector(
-                        onTap: () {
-                          // Could navigate to a search/address entry screen
-                        },
+                        onTap: _openLocationSearch,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -220,11 +297,20 @@ class _HomeScreenState extends State<HomeScreen> {
                               Icon(Icons.search,
                                   color: AppTheme.textSecondary, size: 20),
                               const SizedBox(width: 8),
-                              Text(
-                                'Where are you going?',
-                                style: TextStyle(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 16,
+                              Expanded(
+                                child: Text(
+                                  hasLocations
+                                      ? _destinationAddress ??
+                                          'Where are you going?'
+                                      : 'Where are you going?',
+                                  style: TextStyle(
+                                    color: hasLocations
+                                        ? AppTheme.textPrimary
+                                        : AppTheme.textSecondary,
+                                    fontSize: 16,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
@@ -238,32 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Instructions overlay
-          if (_pickupLatLng == null || _destinationLatLng == null)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 80,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _pickupLatLng == null
-                      ? 'Tap the map to set your PICKUP point'
-                      : 'Now tap to set your DESTINATION',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-
-          // Bottom Action Sheet
+          // Bottom Sheet
           Positioned(
             bottom: 0,
             left: 0,
@@ -294,50 +355,66 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
 
-                  // Status indicators
-                  if (_pickupLatLng != null || _destinationLatLng != null) ...[
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.circle,
-                          size: 12,
-                          color: _pickupLatLng != null
-                              ? AppTheme.successColor
-                              : AppTheme.dividerColor,
+                  // Location summary (when locations are set)
+                  if (hasLocations) ...[
+                    _buildLocationRow(
+                      icon: Icons.circle,
+                      iconColor: AppTheme.successColor,
+                      text: _pickupAddress ?? 'Pickup',
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 5),
+                      child: Container(
+                        width: 2,
+                        height: 16,
+                        color: AppTheme.dividerColor,
+                      ),
+                    ),
+                    _buildLocationRow(
+                      icon: Icons.circle,
+                      iconColor: AppTheme.dangerColor,
+                      text: _destinationAddress ?? 'Destination',
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Fare estimate
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppTheme.primaryColor.withOpacity(0.2),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _pickupLatLng != null
-                              ? 'Pickup set'
-                              : 'Tap map for pickup',
-                          style: TextStyle(
-                            color: _pickupLatLng != null
-                                ? AppTheme.successColor
-                                : AppTheme.textSecondary,
-                          ),
-                        ),
-                        const Spacer(),
-                        Icon(
-                          Icons.circle,
-                          size: 12,
-                          color: _destinationLatLng != null
-                              ? AppTheme.dangerColor
-                              : AppTheme.dividerColor,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _destinationLatLng != null
-                              ? 'Destination set'
-                              : 'Tap map for destination',
-                          style: TextStyle(
-                            color: _destinationLatLng != null
-                                ? AppTheme.dangerColor
-                                : AppTheme.textSecondary,
-                          ),
-                        ),
-                      ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (_estimateLoading)
+                            const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2),
+                            )
+                          else ...[
+                            const Icon(Icons.payments_outlined,
+                                color: AppTheme.primaryColor, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              _fareEstimate?.displayRange ??
+                                  'Estimating fare...',
+                              style: const TextStyle(
+                                color: AppTheme.primaryColor,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -349,33 +426,42 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: SizedBox(
                           height: 52,
                           child: ElevatedButton.icon(
-                            onPressed: () =>
-                                _navigateToBooking(models.TripType.RIDE),
-                            icon: const Icon(Icons.two_wheeler),
-                            label: const Text('Request Ride'),
+                            onPressed: hasLocations
+                                ? () => _navigateToBooking(
+                                    models.TripType.RIDE)
+                                : _openLocationSearch,
+                            icon: Icon(hasLocations
+                                ? Icons.two_wheeler
+                                : Icons.search),
+                            label: Text(hasLocations
+                                ? 'Request Ride'
+                                : 'Where are you going?'),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: SizedBox(
-                          height: 52,
-                          child: OutlinedButton.icon(
-                            onPressed: () =>
-                                _navigateToBooking(models.TripType.DELIVERY),
-                            icon: const Icon(Icons.local_shipping_outlined),
-                            label: const Text('Delivery'),
+                      if (hasLocations) ...[
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 52,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _navigateToBooking(
+                                  models.TripType.DELIVERY),
+                              icon: const Icon(
+                                  Icons.local_shipping_outlined),
+                              label: const Text('Delivery'),
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
 
-                  if (_pickupLatLng != null || _destinationLatLng != null) ...[
-                    const SizedBox(height: 12),
+                  if (hasLocations) ...[
+                    const SizedBox(height: 8),
                     TextButton(
-                      onPressed: _clearMarkers,
-                      child: const Text('Clear points'),
+                      onPressed: _clearLocations,
+                      child: const Text('Clear'),
                     ),
                   ],
                 ],
@@ -386,7 +472,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // My Location FAB
           Positioned(
             right: 16,
-            bottom: 240,
+            bottom: hasLocations ? 320 : 200,
             child: FloatingActionButton.small(
               heroTag: 'myLocation',
               backgroundColor: Colors.white,
@@ -397,6 +483,27 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLocationRow({
+    required IconData icon,
+    required Color iconColor,
+    required String text,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 10, color: iconColor),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14),
+          ),
+        ),
+      ],
     );
   }
 

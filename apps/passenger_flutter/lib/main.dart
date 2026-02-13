@@ -10,6 +10,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/otp_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/booking/booking_screen.dart';
+import 'screens/booking/location_search_screen.dart';
 import 'screens/booking/delivery_details_screen.dart';
 import 'screens/trip/searching_screen.dart';
 import 'screens/trip/active_trip_screen.dart';
@@ -42,6 +43,7 @@ class RideSurePassengerApp extends StatelessWidget {
           '/login': (context) => const LoginScreen(),
           '/otp': (context) => const OtpScreen(),
           '/home': (context) => const HomeScreen(),
+          '/location-search': (context) => const LocationSearchScreen(),
           '/booking': (context) => const BookingScreen(),
           '/delivery-details': (context) => const DeliveryDetailsScreen(),
           '/searching': (context) => const SearchingScreen(),
