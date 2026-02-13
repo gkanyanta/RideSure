@@ -82,14 +82,22 @@ export class OtpService {
   }
 
   async generateAndSend(phone: string): Promise<{ sent: boolean }> {
-    const code = process.env.NODE_ENV === 'production'
-      ? Math.floor(100000 + Math.random() * 900000).toString()
-      : '123456';
+    const testCode = process.env.OTP_TEST_CODE;
+    const code = testCode
+      ? testCode
+      : process.env.NODE_ENV === 'production'
+        ? Math.floor(100000 + Math.random() * 900000).toString()
+        : '123456';
     const expiresAt = new Date(Date.now() + this.expiryMinutes * 60 * 1000);
 
     await this.prisma.otpCode.create({
       data: { phone, code, expiresAt },
     });
+
+    // Skip sending when using a test code
+    if (testCode) {
+      return { sent: true };
+    }
 
     const sent = await this.provider.send(phone, code);
     return { sent };
