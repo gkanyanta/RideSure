@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiConfig {
   // Toggle this to switch between local dev and Render deployment
-  static const bool useProduction = false;
+  static const bool useProduction = true;
 
   static const String _renderHost = 'ridesure-api.onrender.com';
   static const String _localHost = '10.0.2.2';
