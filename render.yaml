@@ -39,7 +39,7 @@ services:
     name: ridesure-admin
     runtime: node
     rootDir: apps/admin_next
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: node .next/standalone/server.js
     envVars:
       - key: NODE_ENV
