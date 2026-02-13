@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const Twilio = require('twilio');
 
 export interface OtpProvider {
   send(phone: string, code: string): Promise<boolean>;
@@ -15,13 +17,67 @@ class MockOtpProvider implements OtpProvider {
   }
 }
 
+/** Twilio OTP provider — tries WhatsApp first, falls back to SMS */
+class TwilioOtpProvider implements OtpProvider {
+  private readonly logger = new Logger('TwilioOTP');
+  private readonly client: any;
+  private readonly smsFrom: string;
+  private readonly whatsappFrom: string | undefined;
+
+  constructor() {
+    this.client = Twilio(
+      process.env.TWILIO_ACCOUNT_SID!,
+      process.env.TWILIO_AUTH_TOKEN!,
+    );
+    this.smsFrom = process.env.TWILIO_PHONE_NUMBER!;
+    this.whatsappFrom = process.env.TWILIO_WHATSAPP_NUMBER;
+  }
+
+  async send(phone: string, code: string): Promise<boolean> {
+    const body = `Your RideSure verification code is: ${code}`;
+
+    // Try WhatsApp first if configured
+    if (this.whatsappFrom) {
+      try {
+        await this.client.messages.create({
+          body,
+          from: `whatsapp:${this.whatsappFrom}`,
+          to: `whatsapp:${phone}`,
+        });
+        this.logger.log(`WhatsApp OTP sent to ${phone}`);
+        return true;
+      } catch (err) {
+        this.logger.warn(
+          `WhatsApp failed for ${phone}, falling back to SMS: ${err.message}`,
+        );
+      }
+    }
+
+    // Fall back to SMS
+    try {
+      await this.client.messages.create({
+        body,
+        from: this.smsFrom,
+        to: phone,
+      });
+      this.logger.log(`SMS OTP sent to ${phone}`);
+      return true;
+    } catch (err) {
+      this.logger.error(`SMS failed for ${phone}: ${err.message}`);
+      return false;
+    }
+  }
+}
+
 @Injectable()
 export class OtpService {
   private readonly provider: OtpProvider;
   private readonly expiryMinutes: number;
 
   constructor(private prisma: PrismaService) {
-    this.provider = new MockOtpProvider();
+    this.provider = process.env.TWILIO_ACCOUNT_SID
+      ? new TwilioOtpProvider()
+      : new MockOtpProvider();
     this.expiryMinutes = parseInt(process.env.OTP_EXPIRY_MINUTES || '5', 10);
   }
 

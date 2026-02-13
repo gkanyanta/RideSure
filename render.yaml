@@ -25,3 +25,11 @@ services:
         value: 7d
       - key: OTP_EXPIRY_MINUTES
         value: "5"
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+      - key: TWILIO_WHATSAPP_NUMBER
+        sync: false
