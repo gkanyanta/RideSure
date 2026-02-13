@@ -160,6 +160,25 @@ export class RidersService {
 
   // -- Admin methods --
 
+  async getRiderById(riderId: string) {
+    const rider = await this.prisma.rider.findUnique({
+      where: { id: riderId },
+      include: {
+        user: { select: { id: true, phone: true, name: true } },
+        documents: {
+          select: {
+            id: true, type: true, status: true, insurerName: true,
+            policyNumber: true, expiryDate: true, rejectionReason: true,
+            createdAt: true,
+          },
+        },
+        vehicle: true,
+      },
+    });
+    if (!rider) throw new NotFoundException('Rider not found');
+    return rider;
+  }
+
   async getPendingApprovals() {
     return this.prisma.rider.findMany({
       where: { status: 'PENDING_APPROVAL' },

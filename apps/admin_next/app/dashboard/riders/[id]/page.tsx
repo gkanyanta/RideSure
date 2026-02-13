@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { apiFetch, API_URL } from '@/components/api';
+import { apiFetch, API_URL, getToken } from '@/components/api';
 import StatusBadge from '@/components/status-badge';
 
 export default function RiderDetailPage() {
@@ -13,6 +13,7 @@ export default function RiderDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [viewingDoc, setViewingDoc] = useState<string | null>(null);
 
   useEffect(() => {
     loadRider();
@@ -21,14 +22,8 @@ export default function RiderDetailPage() {
 
   async function loadRider() {
     try {
-      // Fetch rider by navigating the admin list and finding by id
-      const riders = await apiFetch('/riders/admin/list');
-      const found = (Array.isArray(riders) ? riders : []).find((r: any) => r.id === id);
-      if (found) {
-        // Get full profile with documents
-        // We'll construct what we need from the list data
-        setRider(found);
-      }
+      const data = await apiFetch(`/riders/admin/${id}`);
+      setRider(data);
     } catch (e) {
       console.error(e);
     }
@@ -63,6 +58,11 @@ export default function RiderDetailPage() {
       alert(e.message);
     }
     setActionLoading(false);
+  }
+
+  function getDocUrl(docId: string) {
+    const token = getToken();
+    return `${API_URL}/riders/documents/${docId}/file?token=${token}`;
   }
 
   if (loading) return <div className="text-center py-12">Loading...</div>;
@@ -125,7 +125,7 @@ export default function RiderDetailPage() {
           {rider.documents && rider.documents.length > 0 ? (
             <div className="space-y-4">
               {rider.documents.map((doc: any) => (
-                <div key={doc.id} className="border rounded-lg p-4">
+                <div key={doc.id || doc.type} className="border rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium">{doc.type.replace(/_/g, ' ')}</span>
                     <StatusBadge status={doc.status} />
@@ -142,14 +142,28 @@ export default function RiderDetailPage() {
                     </div>
                   )}
                   {doc.id && (
-                    <a
-                      href={`${API_URL}/riders/documents/${doc.id}/file`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 text-sm"
+                    <button
+                      onClick={() => setViewingDoc(viewingDoc === doc.id ? null : doc.id)}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                     >
-                      View Document
-                    </a>
+                      {viewingDoc === doc.id ? 'Hide' : 'View Document'}
+                    </button>
+                  )}
+                  {viewingDoc === doc.id && doc.id && (
+                    <div className="mt-3">
+                      <img
+                        src={getDocUrl(doc.id)}
+                        alt={doc.type}
+                        className="max-w-full rounded-lg border"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                          (e.target as HTMLImageElement).insertAdjacentHTML(
+                            'afterend',
+                            '<p class="text-red-500 text-sm">Failed to load document</p>'
+                          );
+                        }}
+                      />
+                    </div>
                   )}
                 </div>
               ))}

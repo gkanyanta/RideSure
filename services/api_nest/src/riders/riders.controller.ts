@@ -27,6 +27,7 @@ import {
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { PrismaService } from '../prisma.service';
 
 @ApiTags('riders')
@@ -98,8 +99,27 @@ export class RidersController {
   }
 
   @Get('documents/:docId/file')
-  @ApiOperation({ summary: 'Download a document file (auth required)' })
-  async getDocumentFile(@Param('docId') docId: string, @Res() res: Response) {
+  @Public()
+  @ApiOperation({ summary: 'Download a document file (token via query param or header)' })
+  async getDocumentFile(
+    @Param('docId') docId: string,
+    @Query('token') token: string,
+    @Res() res: Response,
+  ) {
+    // Validate token from query param if no auth header was provided
+    // (allows <img src="...?token=xxx"> to work in browser)
+    if (token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const payload = jwt.verify(token, process.env.JWT_SECRET || 'dev-jwt-secret');
+        if (payload.role !== 'ADMIN' && payload.role !== 'RIDER') {
+          return res.status(403).json({ message: 'Forbidden' });
+        }
+      } catch {
+        return res.status(401).json({ message: 'Invalid token' });
+      }
+    }
+
     const doc = await this.prisma.riderDocument.findUnique({
       where: { id: docId },
     });
@@ -108,6 +128,7 @@ export class RidersController {
 
     res.setHeader('Content-Type', doc.mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${doc.originalName}"`);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
     res.send(doc.fileData);
   }
 
@@ -143,6 +164,14 @@ export class RidersController {
   @ApiOperation({ summary: 'Get riders pending approval' })
   async getPendingApprovals() {
     return this.ridersService.getPendingApprovals();
+  }
+
+  @Get('admin/:riderId')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Get a single rider with full profile and documents' })
+  async getRiderById(@Param('riderId') riderId: string) {
+    return this.ridersService.getRiderById(riderId);
   }
 
   @Patch('admin/:riderId/review')
