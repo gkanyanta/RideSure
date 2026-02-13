@@ -93,6 +93,74 @@ async function main() {
   });
   console.log(`Test rider: ${riderUser.phone}`);
 
+  // Create a test rider pending approval (to test admin onboarding flow)
+  const pendingRiderUser = await prisma.user.upsert({
+    where: { phone: '+260971000003' },
+    update: {},
+    create: {
+      phone: '+260971000003',
+      name: 'John Banda',
+      role: 'RIDER',
+    },
+  });
+
+  const pendingRider = await prisma.rider.upsert({
+    where: { userId: pendingRiderUser.id },
+    update: {},
+    create: {
+      userId: pendingRiderUser.id,
+      status: 'PENDING_APPROVAL',
+    },
+  });
+
+  await prisma.vehicle.upsert({
+    where: { riderId: pendingRider.id },
+    update: {},
+    create: {
+      riderId: pendingRider.id,
+      model: 'Boxer BM150',
+      color: 'Blue',
+      plateNumber: 'MUF 5678',
+    },
+  });
+
+  // Create dummy documents for the pending rider (1x1 transparent PNG placeholder)
+  const placeholderPng = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+    'base64',
+  );
+
+  const documentTypes = [
+    'SELFIE', 'RIDER_LICENCE', 'INSURANCE_CERTIFICATE',
+    'BIKE_FRONT', 'BIKE_BACK', 'BIKE_LEFT', 'BIKE_RIGHT',
+  ] as const;
+
+  for (const docType of documentTypes) {
+    const extra = docType === 'INSURANCE_CERTIFICATE'
+      ? {
+          insurerName: 'ZSIC General Insurance',
+          policyNumber: 'POL-2026-00123',
+          expiryDate: new Date('2027-06-30'),
+        }
+      : {};
+
+    await prisma.riderDocument.upsert({
+      where: { riderId_type: { riderId: pendingRider.id, type: docType } },
+      update: {},
+      create: {
+        riderId: pendingRider.id,
+        type: docType,
+        status: 'PENDING',
+        filePath: `db://${pendingRider.id}/${docType}`,
+        originalName: `${docType.toLowerCase()}.png`,
+        mimeType: 'image/png',
+        fileData: placeholderPng,
+        ...extra,
+      },
+    });
+  }
+  console.log(`Pending rider: ${pendingRiderUser.phone} (PENDING_APPROVAL with 7 documents)`);
+
   console.log('Seed completed successfully!');
 }
 
