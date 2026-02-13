@@ -173,17 +173,37 @@ class TripOffer {
   });
 
   factory TripOffer.fromJson(Map<String, dynamic> json) {
-    // The backend sends the full trip object as the offer
-    // tripId may be at top level or inside the trip data
+    // Backend sends flat offer data: { tripId, type, passengerName, pickupAddress, ... }
+    // Map it into a Trip-compatible shape
+    final tripId = json['tripId'] ?? json['id'] ?? '';
+
     final tripData = json['trip'] is Map<String, dynamic>
         ? json['trip'] as Map<String, dynamic>
-        : json;
-    final tripId = json['tripId'] ?? tripData['id'] ?? '';
+        : <String, dynamic>{
+            'id': tripId,
+            'type': json['type'],
+            'status': 'OFFERED',
+            'pickupAddress': json['pickupAddress'] ?? '',
+            'pickupLandmark': json['pickupLandmark'],
+            'destinationAddress': json['destinationAddress'] ?? '',
+            'pickupLat': json['pickupLat'] ?? 0,
+            'pickupLng': json['pickupLng'] ?? 0,
+            'destinationLat': json['destinationLat'] ?? 0,
+            'destinationLng': json['destinationLng'] ?? 0,
+            'estimatedFareLow': json['estimatedFareLow'],
+            'estimatedFareHigh': json['estimatedFareHigh'],
+            'estimatedDistance': json['estimatedDistance'],
+            'packageType': json['packageType'],
+            'packageNotes': json['packageNotes'],
+            'passenger': json['passengerName'] != null
+                ? {'name': json['passengerName']}
+                : json['passenger'],
+          };
 
     return TripOffer(
       tripId: tripId,
       trip: Trip.fromJson(tripData),
-      expiresInSeconds: json['expiresIn'] ?? json['timeout'] ?? 15,
+      expiresInSeconds: json['timeoutSec'] ?? json['expiresIn'] ?? json['timeout'] ?? 15,
     );
   }
 }

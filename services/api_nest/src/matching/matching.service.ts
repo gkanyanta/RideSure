@@ -139,10 +139,16 @@ export class MatchingService {
       passengerName: trip?.passenger?.name,
       pickupAddress: trip?.pickupAddress,
       pickupLandmark: trip?.pickupLandmark,
+      pickupLat: trip?.pickupLat,
+      pickupLng: trip?.pickupLng,
       destinationAddress: trip?.destinationAddress,
+      destinationLat: trip?.destinationLat,
+      destinationLng: trip?.destinationLng,
       estimatedFareLow: trip?.estimatedFareLow,
       estimatedFareHigh: trip?.estimatedFareHigh,
       estimatedDistance: trip?.estimatedDistance,
+      packageType: trip?.packageType,
+      packageNotes: trip?.packageNotes,
       timeoutSec: this.acceptanceWindowSec,
     });
 

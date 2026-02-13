@@ -89,7 +89,12 @@ class TripService extends ChangeNotifier {
       final response = await ApiConfig.dio.post('/trips', data: data);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        _currentTrip = Trip.fromJson(response.data);
+        // Backend returns { trip: {...}, fareEstimate: {...} }
+        final responseData = response.data;
+        final tripJson = responseData is Map && responseData.containsKey('trip')
+            ? responseData['trip']
+            : responseData;
+        _currentTrip = Trip.fromJson(tripJson);
         _isLoading = false;
         notifyListeners();
         return _currentTrip;
@@ -286,6 +291,13 @@ class TripService extends ChangeNotifier {
         }
         notifyListeners();
       } catch (_) {}
+    }
+  }
+
+  void updateTripStatus(TripStatus status, {Rider? rider}) {
+    if (_currentTrip != null) {
+      _currentTrip = _currentTrip!.copyWith(status: status, rider: rider);
+      notifyListeners();
     }
   }
 

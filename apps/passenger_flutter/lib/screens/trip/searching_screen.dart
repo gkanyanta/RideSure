@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
-import '../../models/models.dart';
+import '../../models/models.dart' as models;
 import '../../services/trip_service.dart';
 import '../../services/socket_service.dart';
 
@@ -45,7 +45,15 @@ class _SearchingScreenState extends State<SearchingScreen>
     socket.listenForTripUpdates(
       onAccepted: (data) {
         if (data is Map<String, dynamic>) {
-          tripService.updateTripFromSocket(data);
+          // trip:accepted payload has { tripId, rider: {...} }
+          // Update current trip with rider info and ACCEPTED status
+          final riderData = data['rider'];
+          if (tripService.currentTrip != null && riderData is Map<String, dynamic>) {
+            final rider = models.Rider.fromJson(riderData);
+            tripService.updateTripStatus(models.TripStatus.ACCEPTED, rider: rider);
+          } else {
+            tripService.updateTripFromSocket(data);
+          }
         }
         if (mounted) {
           Navigator.pushReplacementNamed(context, '/active-trip');
@@ -64,6 +72,12 @@ class _SearchingScreenState extends State<SearchingScreen>
         }
       },
     );
+
+    // Emit trip:request to trigger backend matching
+    final trip = tripService.currentTrip;
+    if (trip != null && trip.id.isNotEmpty) {
+      socket.emit('trip:request', {'tripId': trip.id});
+    }
   }
 
   void _showNoRidersDialog() {

@@ -64,6 +64,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (trip != null && mounted) {
       switch (trip.status) {
         case models.TripStatus.SEARCHING:
+        case models.TripStatus.REQUESTED:
+        case models.TripStatus.OFFERED:
           Navigator.pushNamed(context, '/searching');
           break;
         case models.TripStatus.ACCEPTED:
