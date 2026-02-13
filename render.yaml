@@ -33,3 +33,18 @@ services:
         sync: false
       - key: TWILIO_WHATSAPP_NUMBER
         sync: false
+
+  - type: web
+    plan: free
+    name: ridesure-admin
+    runtime: node
+    rootDir: apps/admin_next
+    buildCommand: npm install && npm run build
+    startCommand: node .next/standalone/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: https://ridesure-api.onrender.com/api
+      - key: PORT
+        value: "3000"
