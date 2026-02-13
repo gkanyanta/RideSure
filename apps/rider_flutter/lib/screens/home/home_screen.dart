@@ -50,8 +50,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     final location = context.read<LocationService>();
     await location.checkPermissions();
-
-    _refreshData();
   }
 
   void _handleTripOffer(TripOffer offer) {

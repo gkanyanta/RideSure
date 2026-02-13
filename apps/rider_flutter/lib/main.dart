@@ -107,7 +107,7 @@ class _AuthGateState extends State<AuthGate> {
           return const LoginScreen();
         }
 
-        // Fetch rider profile if needed
+        // Fetch rider profile once (not on every rebuild)
         final rider = context.read<RiderService>();
         if (rider.profile == null && !rider.isLoading) {
           rider.fetchProfile();
@@ -115,7 +115,7 @@ class _AuthGateState extends State<AuthGate> {
 
         return Consumer<RiderService>(
           builder: (context, riderService, _) {
-            if (riderService.isLoading || riderService.profile == null) {
+            if (riderService.profile == null) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );
@@ -131,7 +131,15 @@ class _AuthGateState extends State<AuthGate> {
               return const _PendingApprovalScreen();
             }
 
-            // APPROVED or ACTIVE
+            if (status == 'REJECTED') {
+              return const _RejectedScreen();
+            }
+
+            if (status == 'SUSPENDED') {
+              return const _SuspendedScreen();
+            }
+
+            // APPROVED — show home
             return const HomeScreen();
           },
         );
@@ -168,6 +176,108 @@ class _PendingApprovalScreen extends StatelessWidget {
               const Text(
                 'We are verifying your documents. This usually takes 24-48 hours. '
                 'You will receive an SMS when your account is approved.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+              const SizedBox(height: 32),
+              OutlinedButton.icon(
+                onPressed: () {
+                  context.read<RiderService>().fetchProfile();
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh Status'),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
+                  context.read<AuthService>().logout();
+                },
+                child: const Text('Logout'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RejectedScreen extends StatelessWidget {
+  const _RejectedScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final rider = context.watch<RiderService>();
+    final reason = rider.profile?.rejectionReason ?? 'Your documents did not meet requirements.';
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Application Rejected')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.cancel_outlined, size: 80, color: Colors.red),
+              const SizedBox(height: 24),
+              const Text(
+                'Your application was rejected',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                reason,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton.icon(
+                onPressed: () {
+                  context.read<RiderService>().fetchProfile();
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Refresh Status'),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
+                  context.read<AuthService>().logout();
+                },
+                child: const Text('Logout'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SuspendedScreen extends StatelessWidget {
+  const _SuspendedScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Account Suspended')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.block, size: 80, color: Colors.orange),
+              const SizedBox(height: 24),
+              const Text(
+                'Your account is suspended',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'This usually happens when your insurance has expired. '
+                'Please renew your insurance and contact support.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
