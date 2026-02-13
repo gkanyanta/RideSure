@@ -157,6 +157,7 @@ export class RidersController {
   }
 
   // --- Admin endpoints ---
+  // NOTE: Static routes (pending, list) MUST be before :riderId wildcard
 
   @Get('admin/pending')
   @UseGuards(RolesGuard)
@@ -164,6 +165,14 @@ export class RidersController {
   @ApiOperation({ summary: 'Get riders pending approval' })
   async getPendingApprovals() {
     return this.ridersService.getPendingApprovals();
+  }
+
+  @Get('admin/list')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'List all riders with optional status filter' })
+  async listRiders(@Query('status') status?: RiderStatus) {
+    return this.ridersService.listRiders(status);
   }
 
   @Get('admin/:riderId')
@@ -184,13 +193,5 @@ export class RidersController {
     @Body() dto: AdminReviewDto,
   ) {
     return this.ridersService.reviewRider(riderId, dto.action, admin.id, dto.reason);
-  }
-
-  @Get('admin/list')
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'List all riders with optional status filter' })
-  async listRiders(@Query('status') status?: RiderStatus) {
-    return this.ridersService.listRiders(status);
   }
 }
